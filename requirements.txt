@@ -1,0 +1,10 @@
+PyQt6
+pandas
+geopandas
+matplotlib
+contextily
+shapely
+scipy
+geopy
+utm
+cartopy
