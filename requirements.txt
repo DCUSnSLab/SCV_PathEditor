@@ -8,3 +8,4 @@ scipy
 geopy
 utm
 cartopy
+dataclasses
