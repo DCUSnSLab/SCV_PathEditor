@@ -1,9 +1,9 @@
 import sys, os, json, math
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget,
     QFileDialog, QLabel, QMessageBox, QHBoxLayout, QTableWidget, QTableWidgetItem, QLineEdit
 )
-from PyQt6.QtCore import QUrl
+from PyQt5.QtCore import QUrl
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from modules.ui_setup import setup_ui
 from modules.model import Node, Link
@@ -37,7 +37,77 @@ class MainWindow(QMainWindow):
             self.populate_link_table()
             self.display_map()
         
-    def save_file(self): # 아직 save 미구현
+    def update_nodes_from_table(self):
+        # 테이블에서 수정된 Node 데이터를 self.nodes에 반영
+        for row in range(self.node_table.rowCount()):
+            # 해당 행의 노드 ID 찾기
+            node_id = self.node_table.item(row, 0).text()
+            # 해당 ID를 가진 노드 찾기
+            node = next((n for n in self.nodes if n.ID == node_id), None)
+            if not node:
+                continue
+            
+            # 노드 속성 업데이트
+            node.AdminCode = self.node_table.item(row, 1).text()
+            node.NodeType = int(self.node_table.item(row, 2).text())
+            node.ITSNodeID = self.node_table.item(row, 3).text()
+            node.Maker = self.node_table.item(row, 4).text()
+            node.UpdateDate = self.node_table.item(row, 5).text()
+            node.Version = self.node_table.item(row, 6).text()
+            node.Remark = self.node_table.item(row, 7).text()
+            node.HistType = self.node_table.item(row, 8).text()
+            node.HistRemark = self.node_table.item(row, 9).text()
+            
+            # GpsInfo 업데이트
+            node.GpsInfo.Lat = float(self.node_table.item(row, 10).text())
+            node.GpsInfo.Long = float(self.node_table.item(row, 11).text())
+            node.GpsInfo.Alt = float(self.node_table.item(row, 12).text())
+            
+            # UtmInfo 업데이트
+            node.UtmInfo.Easting = float(self.node_table.item(row, 13).text())
+            node.UtmInfo.Northing = float(self.node_table.item(row, 14).text())
+            node.UtmInfo.Zone = self.node_table.item(row, 15).text()
+    
+    def update_links_from_table(self):
+        # 테이블에서 수정된 Link 데이터를 self.links에 반영
+        for row in range(self.link_table.rowCount()):
+            # 해당 행의 링크 ID 찾기
+            link_id = self.link_table.item(row, 0).text()
+            # 해당 ID를 가진 링크 찾기
+            link = next((l for l in self.links if l.ID == link_id), None)
+            if not link:
+                continue
+            
+            # 링크 속성 업데이트
+            link.AdminCode = self.link_table.item(row, 1).text()
+            link.RoadRank = int(self.link_table.item(row, 2).text())
+            link.RoadType = int(self.link_table.item(row, 3).text())
+            link.RoadNo = self.link_table.item(row, 4).text()
+            link.LinkType = int(self.link_table.item(row, 5).text())
+            link.LaneNo = int(self.link_table.item(row, 6).text())
+            link.R_LinkID = self.link_table.item(row, 7).text()
+            link.L_LinkID = self.link_table.item(row, 8).text()
+            link.FromNodeID = self.link_table.item(row, 9).text()
+            link.ToNodeID = self.link_table.item(row, 10).text()
+            link.SectionID = self.link_table.item(row, 11).text()
+            link.Length = float(self.link_table.item(row, 12).text())
+            link.ITSLinkID = self.link_table.item(row, 13).text()
+            link.Maker = self.link_table.item(row, 14).text()
+            link.UpdateDate = self.link_table.item(row, 15).text()
+            link.Version = self.link_table.item(row, 16).text()
+            link.Remark = self.link_table.item(row, 17).text()
+            link.HistType = self.link_table.item(row, 18).text()
+            link.HistRemark = self.link_table.item(row, 19).text()
+    
+    def save_file(self):
+        # 테이블에서 수정된 데이터를 업데이트
+        try:
+            self.update_nodes_from_table()
+            self.update_links_from_table()
+        except Exception as e:
+            QMessageBox.warning(self, "데이터 업데이트 오류", f"테이블 데이터를 업데이트하는 중 오류가 발생했습니다:\n{e}")
+            return
+            
         # 기본 경로: data/path 폴더 (현재 main_window.py 기준 경로 설정)
         base_dir = os.path.dirname(os.path.abspath(__file__))
         default_path = os.path.join(base_dir, '..', 'data', 'path')
@@ -70,12 +140,14 @@ class MainWindow(QMainWindow):
         print("add_link")
         if not self.nodes:
             return
+            
         node_dict = {node.ID: node for node in self.nodes}
         from_node = node_dict.get(link["FromNodeID"])
         to_node = node_dict.get(link["ToNodeID"])
         print(from_node, to_node)
         if not (from_node and to_node):
             return
+            
         # GpsInfo 좌표를 사용하여 화살표 그리기
         ax, ay = from_node.GpsInfo.Long, from_node.GpsInfo.Lat
         bx, by = to_node.GpsInfo.Long, to_node.GpsInfo.Lat
@@ -198,7 +270,7 @@ def main():
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
-    sys.exit(app.exec())
+    sys.exit(app.exec_())
     
 if __name__ == "__main__":
     main()

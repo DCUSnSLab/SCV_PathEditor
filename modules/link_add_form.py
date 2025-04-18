@@ -1,7 +1,7 @@
 import json, random
 from math import sqrt
 from datetime import datetime
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QWidget, QLabel, QLineEdit, QFormLayout, QHBoxLayout,
     QPushButton, QMessageBox, QTableWidgetItem
 )
@@ -104,6 +104,34 @@ class LinkAddForm(QWidget):
         }
         QMessageBox.information(self, "New Link Data", json.dumps(final_dict, indent=4, ensure_ascii=False))
         mw = self.main_window
+        
+        # Link 객체 생성 및 self.links에 추가
+        from modules.model import Link
+        new_link = Link(
+            ID=final_dict["ID"],
+            AdminCode=final_dict["AdminCode"],
+            RoadRank=final_dict["RoadRank"],
+            RoadType=final_dict["RoadType"],
+            RoadNo=final_dict["RoadNo"],
+            LinkType=final_dict["LinkType"],
+            LaneNo=final_dict["LaneNo"],
+            R_LinkID=final_dict["R_LinkID"],
+            L_LinkID=final_dict["L_LinkID"],
+            FromNodeID=final_dict["FromNodeID"],
+            ToNodeID=final_dict["ToNodeID"],
+            SectionID=final_dict["SectionID"],
+            Length=final_dict["Length"],
+            ITSLinkID=final_dict["ITSLinkID"],
+            Maker=final_dict["Maker"],
+            UpdateDate=final_dict["UpdateDate"],
+            Version=final_dict["Version"],
+            Remark=final_dict["Remark"],
+            HistType=final_dict["HistType"],
+            HistRemark=final_dict["HistRemark"]
+        )
+        mw.links.append(new_link)
+        
+        # 테이블에 추가
         row = mw.link_table.rowCount()
         mw.link_table.insertRow(row)
         cols = [
@@ -117,4 +145,6 @@ class LinkAddForm(QWidget):
         ]
         for col, value in enumerate(cols):
             mw.link_table.setItem(row, col, QTableWidgetItem(value))
+        
+        # 지도에 표시
         mw.add_link_to_map(final_dict)

@@ -1,7 +1,7 @@
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QPushButton, QVBoxLayout, QWidget, QHBoxLayout, QTableWidget, QLabel, QLineEdit
 )
-from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 from modules.model import Node, Link
 from modules.util import get_column_headers
 from modules.link_add_form import LinkAddForm
@@ -36,9 +36,9 @@ def setup_ui(mw):
     mw.node_label = QLabel("Node Table")
     mw.left_layout.addWidget(mw.node_label)
     mw.node_table = QTableWidget()
-    mw.node_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+    mw.node_table.setSelectionBehavior(QTableWidget.SelectRows)
     mw.node_table.setEditTriggers(
-        QTableWidget.EditTrigger.DoubleClicked | QTableWidget.EditTrigger.SelectedClicked
+        QTableWidget.DoubleClicked | QTableWidget.SelectedClicked
     )
     node_headers = get_column_headers(Node)
     mw.node_table.setColumnCount(len(node_headers))
@@ -48,9 +48,9 @@ def setup_ui(mw):
     mw.link_label = QLabel("Link Table")
     mw.left_layout.addWidget(mw.link_label)
     mw.link_table = QTableWidget()
-    mw.link_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+    mw.link_table.setSelectionBehavior(QTableWidget.SelectRows)
     mw.link_table.setEditTriggers(
-        QTableWidget.EditTrigger.DoubleClicked | QTableWidget.EditTrigger.SelectedClicked
+        QTableWidget.DoubleClicked | QTableWidget.SelectedClicked
     )
     link_headers = get_column_headers(Link)
     mw.link_table.setColumnCount(len(link_headers))
