@@ -49,9 +49,11 @@ class MapCanvas(FigureCanvas):
         self.ax.set_extent([min(lons)-0.001, max(lons)+0.001, min(lats)-0.001, max(lats)+0.001])
         
         # 위성지도 타일 로드
-        url = "http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+        # url = "http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+        url = "https://api.vworld.kr/req/wmts/1.0.0/3FE232D2-4F55-336B-9BC9-011DE07A0459/Base/{z}/{y}/{x}.png"
         try:
-            ctx.add_basemap(self.ax, crs="EPSG:4326", source=url, zoom=15)
+            #ctx.add_basemap(self.ax, crs="EPSG:4326", source=url, zoom=15, resampling=True)
+            ctx.add_basemap(self.ax, crs="EPSG:4326", source=url, resampling=True)
         except Exception as e:
             print(f"타일 로드 오류: {e}")
         
