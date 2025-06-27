@@ -5,6 +5,7 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView
 from modules.model import Node, Link
 from modules.util import get_column_headers
 from modules.link_add_form import LinkAddForm
+from modules.node_add_form import NodeAddForm
 
 def setup_ui(mw):
     mw.setWindowTitle("Path Editor")
@@ -36,6 +37,10 @@ def setup_ui(mw):
     mw.left_layout.addWidget(mw.link_form)
     mw.link_form.from_node_set_button.clicked.connect(mw.set_from_node)
     mw.link_form.to_node_set_button.clicked.connect(mw.set_to_node)
+    
+    # Node Add Form (별도 창으로 표시)
+    mw.node_add_form = NodeAddForm(mw)
+    mw.node_add_form.setVisible(False)
     
     # Node 테이블
     mw.node_label = QLabel("Node Table")
@@ -82,7 +87,7 @@ def setup_ui(mw):
     mw.link_select_button.clicked.connect(mw.enable_link_select_mode)
     btn_layout.addWidget(mw.link_select_button)
     
-    # 새로 추가: Node 드래그 버튼
+    # Node 드래그 버튼
     mw.node_drag_button = QPushButton("Node drag")
     mw.node_drag_button.setStyleSheet("""
         QPushButton {
@@ -103,11 +108,53 @@ def setup_ui(mw):
     mw.node_drag_button.clicked.connect(mw.enable_node_drag_mode)
     btn_layout.addWidget(mw.node_drag_button)
     
-    # 더미 버튼들 (기존 코드 유지)
-    for i in range(2):  # 3개에서 2개로 줄임 (드래그 버튼이 추가되었으므로)
-        dummy_btn = QPushButton(f"Feature {i+1}")
-        dummy_btn.setEnabled(False)  # 비활성화
-        btn_layout.addWidget(dummy_btn)
+    # 새로 추가: Node 추가 버튼
+    mw.node_add_button = QPushButton("Add Node")
+    mw.node_add_button.setStyleSheet("""
+        QPushButton {
+            background-color: #FF9800;
+            color: white;
+            font-weight: bold;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+        }
+        QPushButton:hover {
+            background-color: #F57C00;
+        }
+        QPushButton:pressed {
+            background-color: #E65100;
+        }
+    """)
+    mw.node_add_button.clicked.connect(mw.enable_node_add_mode)
+    btn_layout.addWidget(mw.node_add_button)
+    
+    # 새로 추가: QuickLink 버튼
+    mw.quick_link_button = QPushButton("QuickLink (Q)")
+    mw.quick_link_button.setStyleSheet("""
+        QPushButton {
+            background-color: #2196F3;
+            color: white;
+            font-weight: bold;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+        }
+        QPushButton:hover {
+            background-color: #1976D2;
+        }
+        QPushButton:pressed {
+            background-color: #1565C0;
+        }
+    """)
+    mw.quick_link_button.clicked.connect(mw.enable_quick_link_mode)
+    btn_layout.addWidget(mw.quick_link_button)
+    
+    # 더미 버튼들 (기존 코드 유지) - QuickLink 버튼이 추가되어 더이상 필요없음
+    # for i in range(1):  # QuickLink 버튼이 추가되어 더미 버튼 제거
+    #     dummy_btn = QPushButton(f"Feature {i+1}")
+    #     dummy_btn.setEnabled(False)  # 비활성화
+    #     btn_layout.addWidget(dummy_btn)
     
     mw.right_layout.addLayout(btn_layout)
     

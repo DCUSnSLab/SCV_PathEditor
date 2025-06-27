@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QUrl
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from modules.ui_setup import setup_ui
-from modules.model import Node, Link
+from modules.model import Node, Link, GpsInfo, UtmInfo
 from modules.map_viewer import MapCanvas
 from modules.util import json_to_links, json_to_nodes
 from dataclasses import asdict
@@ -19,6 +19,8 @@ class MainWindow(QMainWindow):
         self.node_select_mode = False
         self.link_select_mode = False
         self.node_drag_mode = False  # 드래그 모드 상태
+        self.node_add_mode = False   # 노드 추가 모드 상태
+        self.quick_link_mode = False # QuickLink 모드 상태
         self.selected_node = None
         setup_ui(self)
     
@@ -159,11 +161,14 @@ class MainWindow(QMainWindow):
         """노드 선택 모드 토글"""
         self.link_select_mode = False
         self.node_drag_mode = False
+        self.node_add_mode = False
+        self.quick_link_mode = False
         self.node_select_mode = not self.node_select_mode
         
-        # 지도 캔버스의 드래그 모드 비활성화
+        # 지도 캔버스의 다른 모드들 비활성화
         if hasattr(self, 'map_canvas'):
             self.map_canvas.enable_drag_mode(False)
+            self.map_canvas.enable_quick_link_mode(False)
         
         msg = "Node 선택 모드 시작" if self.node_select_mode else "Node 선택 모드 종료"
         QMessageBox.information(self, "Node Select", msg)
@@ -172,11 +177,14 @@ class MainWindow(QMainWindow):
         """링크 선택 모드 토글"""
         self.node_select_mode = False
         self.node_drag_mode = False
+        self.node_add_mode = False
+        self.quick_link_mode = False
         self.link_select_mode = not self.link_select_mode
         
-        # 지도 캔버스의 드래그 모드 비활성화
+        # 지도 캔버스의 다른 모드들 비활성화
         if hasattr(self, 'map_canvas'):
             self.map_canvas.enable_drag_mode(False)
+            self.map_canvas.enable_quick_link_mode(False)
             
         msg = "Link 선택 모드 시작" if self.link_select_mode else "Link 선택 모드 종료"
         QMessageBox.information(self, "Link Select", msg)
@@ -185,11 +193,14 @@ class MainWindow(QMainWindow):
         """노드 드래그 모드 토글"""
         self.node_select_mode = False
         self.link_select_mode = False
+        self.node_add_mode = False
+        self.quick_link_mode = False
         self.node_drag_mode = not self.node_drag_mode
         
         # 지도 캔버스의 드래그 모드 설정
         if hasattr(self, 'map_canvas'):
             self.map_canvas.enable_drag_mode(self.node_drag_mode)
+            self.map_canvas.enable_quick_link_mode(False)
         
         if self.node_drag_mode:
             msg = "노드 드래그 모드 시작\n노드를 클릭하고 드래그하여 위치를 변경할 수 있습니다."
@@ -197,6 +208,65 @@ class MainWindow(QMainWindow):
             msg = "노드 드래그 모드 종료"
         
         QMessageBox.information(self, "Node Drag", msg)
+    
+    def enable_node_add_mode(self):
+        """노드 추가 모드 토글"""
+        self.node_select_mode = False
+        self.link_select_mode = False
+        self.node_drag_mode = False
+        self.quick_link_mode = False
+        self.node_add_mode = not self.node_add_mode
+        
+        print(f"Node add mode: {self.node_add_mode}")
+        
+        # 지도 캔버스의 다른 모드들 비활성화
+        if hasattr(self, 'map_canvas'):
+            self.map_canvas.enable_drag_mode(False)
+            self.map_canvas.enable_quick_link_mode(False)
+        
+        if self.node_add_mode:
+            msg = "노드 추가 모드 시작\n지도에서 원하는 위치를 클릭하여 새 노드를 추가할 수 있습니다."
+            print("Node add mode activated")
+        else:
+            msg = "노드 추가 모드 종료"
+            print("Node add mode deactivated")
+            # 노드 추가 폼 숨기기
+            if hasattr(self, 'node_add_form'):
+                self.node_add_form.hide()
+        
+        QMessageBox.information(self, "Add Node", msg)
+    
+    def enable_quick_link_mode(self):
+        """QuickLink 모드 토글"""
+        self.node_select_mode = False
+        self.link_select_mode = False
+        self.node_drag_mode = False
+        self.node_add_mode = False
+        self.quick_link_mode = not self.quick_link_mode
+        
+        print(f"QuickLink mode: {self.quick_link_mode}")
+        
+        # 지도 캔버스의 QuickLink 모드 설정
+        if hasattr(self, 'map_canvas'):
+            self.map_canvas.enable_drag_mode(False)
+            self.map_canvas.enable_quick_link_mode(self.quick_link_mode)
+        
+        if self.quick_link_mode:
+            msg = "QuickLink 모드 시작\n첫 번째 노드를 클릭하고, 두 번째 노드를 클릭하여 링크를 생성하세요.\n\n단축키: Q"
+            print("QuickLink mode activated")
+        else:
+            msg = "QuickLink 모드 종료"
+            print("QuickLink mode deactivated")
+        
+        QMessageBox.information(self, "QuickLink", msg)
+    
+    def toggle_node_add_mode(self):
+        """노드 추가 폼 토글"""
+        if hasattr(self, 'node_add_form'):
+            visible = self.node_add_form.isVisible()
+            self.node_add_form.setVisible(not visible)
+            if not visible:
+                self.node_add_form.reset_form()
     
     def toggle_link_add_mode(self):
         visible = self.link_form.isVisible()
@@ -215,6 +285,7 @@ class MainWindow(QMainWindow):
         self.map_canvas = MapCanvas(self.nodes, self.links)
         self.map_canvas.connect_map_click_event(self.on_map_click)
         self.map_canvas.connect_drag_callback(self.on_node_dragged)
+        self.map_canvas.connect_quick_link_callback(self.on_quick_link_created)  # QuickLink 콜백 연결
         
         toolbar = NavigationToolbar(self.map_canvas, self)
         self.right_layout.addWidget(toolbar)
@@ -222,14 +293,37 @@ class MainWindow(QMainWindow):
 
     def on_map_click(self, event):
         """지도 클릭 이벤트 처리"""
-        if not self.node_select_mode or event.xdata is None or event.ydata is None:
+        if event.xdata is None or event.ydata is None:
+            print("Invalid click coordinates")
             return
+        
         lon, lat = event.xdata, event.ydata
-        closest = self.find_closest_node(lon, lat)
-        if closest:
-            self.selected_node = closest
-            self.text_field_1.setText(closest.ID)
-            self.node_select_mode = False
+        print(f"Map clicked at: ({lat:.6f}, {lon:.6f})")
+        
+        # 노드 선택 모드
+        if self.node_select_mode:
+            print("Node select mode active")
+            closest = self.find_closest_node(lon, lat)
+            if closest:
+                self.selected_node = closest
+                self.text_field_1.setText(closest.ID)
+                self.node_select_mode = False
+                print(f"Selected node: {closest.ID}")
+        
+        # 노드 추가 모드
+        elif self.node_add_mode:
+            print("Node add mode active")
+            if hasattr(self, 'node_add_form'):
+                print("Opening node add form...")
+                self.node_add_form.set_coordinates(lon, lat)
+                self.node_add_form.show()
+                self.node_add_form.raise_()
+                self.node_add_form.activateWindow()  # 창을 액티브로 만들기
+                print(f"노드 추가 위치 선택: ({lat:.6f}, {lon:.6f})")
+            else:
+                print("node_add_form not found!")
+        else:
+            print(f"No active mode. Modes: select={self.node_select_mode}, add={self.node_add_mode}, drag={self.node_drag_mode}")
     
     def on_node_dragged(self, node):
         """노드 드래그 완료 시 호출되는 콜백"""
@@ -286,6 +380,114 @@ class MainWindow(QMainWindow):
         
         if updated_links:
             print(f"노드 {node.ID}와 연결된 {len(updated_links)}개 링크의 길이가 재계산되었습니다.")
+    
+    def add_new_node(self, node_data):
+        """새로운 노드 추가"""
+        try:
+            # GpsInfo 및 UtmInfo 객체 생성
+            gps_info = GpsInfo(**node_data["GpsInfo"])
+            utm_info = UtmInfo(**node_data["UtmInfo"])
+            
+            # Node 객체 생성
+            new_node = Node(
+                ID=node_data["ID"],
+                AdminCode=node_data["AdminCode"],
+                NodeType=node_data["NodeType"],
+                ITSNodeID=node_data["ITSNodeID"],
+                Maker=node_data["Maker"],
+                UpdateDate=node_data["UpdateDate"],
+                Version=node_data["Version"],
+                Remark=node_data["Remark"],
+                HistType=node_data["HistType"],
+                HistRemark=node_data["HistRemark"],
+                GpsInfo=gps_info,
+                UtmInfo=utm_info
+            )
+            
+            # 노드 리스트에 추가
+            self.nodes.append(new_node)
+            
+            # 노드 테이블에 추가
+            row = self.node_table.rowCount()
+            self.node_table.insertRow(row)
+            
+            vals = [
+                new_node.ID, new_node.AdminCode, str(new_node.NodeType), new_node.ITSNodeID,
+                new_node.Maker, new_node.UpdateDate, new_node.Version, new_node.Remark,
+                new_node.HistType, new_node.HistRemark, str(new_node.GpsInfo.Lat),
+                str(new_node.GpsInfo.Long), str(new_node.GpsInfo.Alt), str(new_node.UtmInfo.Easting),
+                str(new_node.UtmInfo.Northing), new_node.UtmInfo.Zone
+            ]
+            
+            for col, val in enumerate(vals):
+                self.node_table.setItem(row, col, QTableWidgetItem(val))
+            
+            # 지도 업데이트 (줌 레벨 유지하면서 노드만 추가)
+            if hasattr(self, 'map_canvas'):
+                self.map_canvas.add_single_node_to_map(new_node)
+            
+            print(f"새 노드 {new_node.ID} 추가 완료: ({new_node.GpsInfo.Lat:.6f}, {new_node.GpsInfo.Long:.6f})")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "노드 추가 오류", f"노드 추가 중 오류가 발생했습니다:\n{str(e)}")
+            print(f"노드 추가 오류: {e}")
+    
+    def on_quick_link_created(self, link_data):
+        """QuickLink로 링크 생성 시 호출되는 콜백"""
+        try:
+            print(f"QuickLink 생성: {link_data['FromNodeID']} → {link_data['ToNodeID']}")
+            
+            # Link 객체 생성
+            from modules.model import Link
+            new_link = Link(
+                ID=link_data["ID"],
+                AdminCode=link_data["AdminCode"],
+                RoadRank=link_data["RoadRank"],
+                RoadType=link_data["RoadType"],
+                RoadNo=link_data["RoadNo"],
+                LinkType=link_data["LinkType"],
+                LaneNo=link_data["LaneNo"],
+                R_LinkID=link_data["R_LinkID"],
+                L_LinkID=link_data["L_LinkID"],
+                FromNodeID=link_data["FromNodeID"],
+                ToNodeID=link_data["ToNodeID"],
+                SectionID=link_data["SectionID"],
+                Length=link_data["Length"],
+                ITSLinkID=link_data["ITSLinkID"],
+                Maker=link_data["Maker"],
+                UpdateDate=link_data["UpdateDate"],
+                Version=link_data["Version"],
+                Remark=link_data["Remark"],
+                HistType=link_data["HistType"],
+                HistRemark=link_data["HistRemark"]
+            )
+            
+            # 링크 리스트에 추가
+            self.links.append(new_link)
+            
+            # 링크 테이블에 추가
+            row = self.link_table.rowCount()
+            self.link_table.insertRow(row)
+            
+            vals = [
+                new_link.ID, new_link.AdminCode, str(new_link.RoadRank), str(new_link.RoadType),
+                new_link.RoadNo, str(new_link.LinkType), str(new_link.LaneNo), new_link.R_LinkID,
+                new_link.L_LinkID, new_link.FromNodeID, new_link.ToNodeID, new_link.SectionID,
+                str(new_link.Length), new_link.ITSLinkID, new_link.Maker, new_link.UpdateDate,
+                new_link.Version, new_link.Remark, new_link.HistType, new_link.HistRemark
+            ]
+            
+            for col, val in enumerate(vals):
+                self.link_table.setItem(row, col, QTableWidgetItem(val))
+            
+            # 지도에 링크 표시 (화살표)
+            self.add_link_to_map(link_data)
+            
+            print(f"QuickLink 완료: {new_link.ID} (길이: {new_link.Length:.3f}km)")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "QuickLink 오류", f"링크 생성 중 오류가 발생했습니다:\n{str(e)}")
+            print(f"QuickLink 오류: {e}")
 
     def populate_node_table(self):
         self.node_table.setRowCount(len(self.nodes))
