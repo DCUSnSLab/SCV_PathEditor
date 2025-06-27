@@ -18,6 +18,7 @@ class MainWindow(QMainWindow):
         self.links = []
         self.node_select_mode = False
         self.link_select_mode = False
+        self.node_drag_mode = False  # 드래그 모드 상태
         self.selected_node = None
         setup_ui(self)
     
@@ -155,16 +156,47 @@ class MainWindow(QMainWindow):
         self.map_canvas.figure.canvas.draw_idle()
         
     def enable_node_select_mode(self):
+        """노드 선택 모드 토글"""
         self.link_select_mode = False
+        self.node_drag_mode = False
         self.node_select_mode = not self.node_select_mode
-        msg = "select mod start" if self.node_select_mode else "select mod end"
+        
+        # 지도 캔버스의 드래그 모드 비활성화
+        if hasattr(self, 'map_canvas'):
+            self.map_canvas.enable_drag_mode(False)
+        
+        msg = "Node 선택 모드 시작" if self.node_select_mode else "Node 선택 모드 종료"
         QMessageBox.information(self, "Node Select", msg)
 
     def enable_link_select_mode(self):
+        """링크 선택 모드 토글"""
         self.node_select_mode = False
+        self.node_drag_mode = False
         self.link_select_mode = not self.link_select_mode
-        msg = "select mod start" if self.link_select_mode else "select mod end"
+        
+        # 지도 캔버스의 드래그 모드 비활성화
+        if hasattr(self, 'map_canvas'):
+            self.map_canvas.enable_drag_mode(False)
+            
+        msg = "Link 선택 모드 시작" if self.link_select_mode else "Link 선택 모드 종료"
         QMessageBox.information(self, "Link Select", msg)
+    
+    def enable_node_drag_mode(self):
+        """노드 드래그 모드 토글"""
+        self.node_select_mode = False
+        self.link_select_mode = False
+        self.node_drag_mode = not self.node_drag_mode
+        
+        # 지도 캔버스의 드래그 모드 설정
+        if hasattr(self, 'map_canvas'):
+            self.map_canvas.enable_drag_mode(self.node_drag_mode)
+        
+        if self.node_drag_mode:
+            msg = "노드 드래그 모드 시작\n노드를 클릭하고 드래그하여 위치를 변경할 수 있습니다."
+        else:
+            msg = "노드 드래그 모드 종료"
+        
+        QMessageBox.information(self, "Node Drag", msg)
     
     def toggle_link_add_mode(self):
         visible = self.link_form.isVisible()
@@ -178,13 +210,18 @@ class MainWindow(QMainWindow):
             w = self.right_layout.itemAt(i).widget()
             if w:
                 w.setParent(None)
+        
+        # 지도 캔버스 생성
         self.map_canvas = MapCanvas(self.nodes, self.links)
         self.map_canvas.connect_map_click_event(self.on_map_click)
+        self.map_canvas.connect_drag_callback(self.on_node_dragged)
+        
         toolbar = NavigationToolbar(self.map_canvas, self)
         self.right_layout.addWidget(toolbar)
         self.right_layout.addWidget(self.map_canvas)
 
     def on_map_click(self, event):
+        """지도 클릭 이벤트 처리"""
         if not self.node_select_mode or event.xdata is None or event.ydata is None:
             return
         lon, lat = event.xdata, event.ydata
@@ -193,6 +230,62 @@ class MainWindow(QMainWindow):
             self.selected_node = closest
             self.text_field_1.setText(closest.ID)
             self.node_select_mode = False
+    
+    def on_node_dragged(self, node):
+        """노드 드래그 완료 시 호출되는 콜백"""
+        print(f"노드 {node.ID} 위치 변경됨: ({node.GpsInfo.Lat}, {node.GpsInfo.Long})")
+        
+        # 테이블 업데이트
+        self.update_node_in_table(node)
+        
+        # 연결된 링크들의 길이 재계산
+        self.recalculate_link_lengths(node)
+    
+    def update_node_in_table(self, node):
+        """특정 노드의 테이블 데이터 업데이트"""
+        for row in range(self.node_table.rowCount()):
+            if self.node_table.item(row, 0).text() == node.ID:
+                # GPS 좌표 업데이트
+                self.node_table.setItem(row, 10, QTableWidgetItem(str(node.GpsInfo.Lat)))
+                self.node_table.setItem(row, 11, QTableWidgetItem(str(node.GpsInfo.Long)))
+                self.node_table.setItem(row, 12, QTableWidgetItem(str(node.GpsInfo.Alt)))
+                
+                # UTM 좌표 업데이트
+                self.node_table.setItem(row, 13, QTableWidgetItem(str(node.UtmInfo.Easting)))
+                self.node_table.setItem(row, 14, QTableWidgetItem(str(node.UtmInfo.Northing)))
+                self.node_table.setItem(row, 15, QTableWidgetItem(node.UtmInfo.Zone))
+                break
+    
+    def recalculate_link_lengths(self, node):
+        """노드 위치 변경 시 연결된 링크들의 길이 재계산"""
+        updated_links = []
+        
+        for i, link in enumerate(self.links):
+            if link.FromNodeID == node.ID or link.ToNodeID == node.ID:
+                # 연결된 노드들 찾기
+                from_node = next((n for n in self.nodes if n.ID == link.FromNodeID), None)
+                to_node = next((n for n in self.nodes if n.ID == link.ToNodeID), None)
+                
+                if from_node and to_node:
+                    # UTM 좌표를 사용하여 거리 계산
+                    ex1, ny1 = from_node.UtmInfo.Easting, from_node.UtmInfo.Northing
+                    ex2, ny2 = to_node.UtmInfo.Easting, to_node.UtmInfo.Northing
+                    dist_m = math.sqrt((ex1 - ex2) ** 2 + (ny1 - ny2) ** 2)
+                    new_length = round(dist_m / 1000.0, 5)  # km 단위
+                    
+                    # 링크 길이 업데이트
+                    link.Length = new_length
+                    updated_links.append((i, link))
+        
+        # 링크 테이블 업데이트
+        for link_index, link in updated_links:
+            for row in range(self.link_table.rowCount()):
+                if self.link_table.item(row, 0).text() == link.ID:
+                    self.link_table.setItem(row, 12, QTableWidgetItem(str(link.Length)))
+                    break
+        
+        if updated_links:
+            print(f"노드 {node.ID}와 연결된 {len(updated_links)}개 링크의 길이가 재계산되었습니다.")
 
     def populate_node_table(self):
         self.node_table.setRowCount(len(self.nodes))
