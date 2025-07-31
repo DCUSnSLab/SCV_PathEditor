@@ -4,7 +4,12 @@ class UIManager {
         this.nodeTable = document.getElementById('nodeTable').getElementsByTagName('tbody')[0];
         this.linkTable = document.getElementById('linkTable').getElementsByTagName('tbody')[0];
         this.selectedNodeInfo = document.getElementById('selectedNodeInfo');
-        this.fileSelect = document.getElementById('fileSelect');
+        
+        // 파일 탐색기 초기화
+        this.fileExplorer = new FileExplorer('fileTree');
+        this.fileExplorer.setOnFileSelect((filepath) => {
+            return this.loadPathData(filepath);
+        });
         
         this.currentData = { Node: [], Link: [] };
         this.setupEventListeners();
@@ -49,12 +54,7 @@ class UIManager {
             this.uploadFile(e.target.files[0]);
         });
 
-        // 파일 선택
-        this.fileSelect.addEventListener('change', (e) => {
-            if (e.target.value) {
-                this.loadPathData(e.target.value);
-            }
-        });
+        // 파일 선택은 이제 파일 탐색기에서 처리
 
         // 모달 관련
         this.setupModalEvents();
@@ -142,33 +142,19 @@ class UIManager {
     }
 
     async loadFileList() {
-        try {
-            showLoading();
-            const files = await pathAPI.listFiles();
-            
-            // 파일 선택 옵션 업데이트
-            this.fileSelect.innerHTML = '<option value="">파일을 선택하세요</option>';
-            files.forEach(file => {
-                const option = document.createElement('option');
-                option.value = file;
-                option.textContent = file;
-                this.fileSelect.appendChild(option);
-            });
-            
-        } catch (error) {
-            handleAPIError(error, '파일 목록을 불러오는 중 오류가 발생했습니다');
-        } finally {
-            hideLoading();
+        // 파일 탐색기에서 자동으로 처리
+        if (this.fileExplorer) {
+            await this.fileExplorer.loadFileTree();
         }
     }
 
     loadFile() {
-        const selectedFile = this.fileSelect.value;
-        if (!selectedFile) {
-            showNotification('파일을 선택해주세요', 'warning');
+        const selectedFile = this.fileExplorer.getSelectedFile();
+        if (!selectedFile || selectedFile.type === 'folder') {
+            showNotification('JSON 파일을 선택해주세요', 'warning');
             return;
         }
-        this.loadPathData(selectedFile);
+        this.loadPathData(selectedFile.fullPath);
     }
 
     async loadPathData(filename) {

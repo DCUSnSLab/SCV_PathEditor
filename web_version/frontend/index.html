@@ -47,10 +47,23 @@
                 </div>
 
                 <div class="control-section">
-                    <h3>파일 목록</h3>
-                    <select id="fileSelect" class="file-select">
-                        <option value="">파일을 선택하세요</option>
-                    </select>
+                    <h3>파일 탐색기</h3>
+                    <div class="file-explorer">
+                        <div class="file-explorer-header">
+                            <button id="refreshFiles" class="btn-icon" title="파일 목록 새로보기">
+                                <span>🔄</span>
+                            </button>
+                            <button id="newFolder" class="btn-icon" title="새 폴더">
+                                <span>📁+</span>
+                            </button>
+                        </div>
+                        <div class="file-tree" id="fileTree">
+                            <div class="file-item loading">
+                                <span class="file-icon">⏳</span>
+                                <span class="file-name">로딩 중...</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -171,6 +184,7 @@
     <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="js/api.js"></script>
+    <script src="js/file-explorer.js"></script>
     <script src="js/map.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/app.js"></script>
