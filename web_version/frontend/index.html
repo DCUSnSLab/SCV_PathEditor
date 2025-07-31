@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCV Path Editor Web</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <h1>SCV Path Editor Web</h1>
+            <div class="header-controls">
+                <button id="loadBtn" class="btn btn-primary">Load</button>
+                <button id="saveBtn" class="btn btn-primary">Save</button>
+                <input type="file" id="fileInput" accept=".json" style="display: none;">
+                <button id="uploadBtn" class="btn btn-secondary">Upload</button>
+                <button id="downloadBtn" class="btn btn-secondary">Download</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel - Controls -->
+            <div class="left-panel">
+                <div class="control-section">
+                    <h3>편집 모드</h3>
+                    <div class="mode-buttons">
+                        <button id="selectModeBtn" class="btn btn-mode">Select Node</button>
+                        <button id="dragModeBtn" class="btn btn-mode">Drag Node</button>
+                        <button id="addNodeModeBtn" class="btn btn-mode">Add Node</button>
+                        <button id="quickLinkModeBtn" class="btn btn-mode">Quick Link</button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>선택된 노드</h3>
+                    <div id="selectedNodeInfo">
+                        <p>노드를 선택해주세요</p>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>파일 목록</h3>
+                    <select id="fileSelect" class="file-select">
+                        <option value="">파일을 선택하세요</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Center Panel - Map -->
+            <div class="center-panel">
+                <div id="map" class="map-container"></div>
+            </div>
+
+            <!-- Right Panel - Data Tables -->
+            <div class="right-panel">
+                <div class="table-section">
+                    <h3>노드 테이블</h3>
+                    <div class="table-container">
+                        <table id="nodeTable" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>위도</th>
+                                    <th>경도</th>
+                                    <th>고도</th>
+                                    <th>UTM E</th>
+                                    <th>UTM N</th>
+                                    <th>Zone</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="table-section">
+                    <h3>링크 테이블</h3>
+                    <div class="table-container">
+                        <table id="linkTable" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>From</th>
+                                    <th>To</th>
+                                    <th>Length (km)</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="nodeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>노드 추가</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="nodeForm">
+                    <div class="form-group">
+                        <label>위도:</label>
+                        <input type="number" id="nodeLat" step="any" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>경도:</label>
+                        <input type="number" id="nodeLon" step="any" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>고도:</label>
+                        <input type="number" id="nodeAlt" step="any" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Maker:</label>
+                        <input type="text" id="nodeMaker" value="SCV Web Editor">
+                    </div>
+                    <div class="form-group">
+                        <label>Remark:</label>
+                        <input type="text" id="nodeRemark" value="">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="saveNodeBtn" class="btn btn-primary">저장</button>
+                <button type="button" id="cancelNodeBtn" class="btn btn-secondary">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="saveModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>파일 저장</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="saveForm">
+                    <div class="form-group">
+                        <label>파일명:</label>
+                        <input type="text" id="saveFilename" placeholder="filename.json">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="confirmSaveBtn" class="btn btn-primary">저장</button>
+                <button type="button" id="cancelSaveBtn" class="btn btn-secondary">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loading" class="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>처리 중...</p>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
