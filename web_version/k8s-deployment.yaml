@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scv-path-editor
+  labels:
+    app: scv-path-editor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scv-path-editor
+  template:
+    metadata:
+      labels:
+        app: scv-path-editor
+    spec:
+      containers:
+      - name: scv-path-editor
+        # Docker Hub 또는 사용하시는 컨테이너 레지스트리 주소에 맞게 수정해주세요.
+        image: your-docker-registry/scv-path-editor:latest
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: scv-path-editor-service
+spec:
+  # LoadBalancer, NodePort, ClusterIP, Ingress 등 환경에 맞게 선택
+  type: LoadBalancer 
+  selector:
+    app: scv-path-editor
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
