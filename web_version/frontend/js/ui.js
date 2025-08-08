@@ -349,16 +349,31 @@ class UIManager {
         }
 
         this.selectedNodeInfo.innerHTML = `
-            <p><strong>ID:</strong> ${nodeData.ID}</p>
-            <p><strong>위도:</strong> ${nodeData.GpsInfo.Lat.toFixed(6)}</p>
-            <p><strong>경도:</strong> ${nodeData.GpsInfo.Long.toFixed(6)}</p>
-            <p><strong>고도:</strong> ${nodeData.GpsInfo.Alt.toFixed(2)}m</p>
-            <p><strong>UTM E:</strong> ${nodeData.UtmInfo.Easting.toFixed(2)}</p>
-            <p><strong>UTM N:</strong> ${nodeData.UtmInfo.Northing.toFixed(2)}</p>
-            <p><strong>Zone:</strong> ${nodeData.UtmInfo.Zone}</p>
-            <p><strong>Maker:</strong> ${nodeData.Maker}</p>
-            <p><strong>Remark:</strong> ${nodeData.Remark}</p>
+            <div class="node-info-header">
+                <h4>선택된 노드: ${nodeData.ID}</h4>
+                <button id="deleteSelectedNode" class="btn btn-danger btn-small" title="선택된 노드 삭제">
+                    🗑️ 삭제
+                </button>
+            </div>
+            <div class="node-info-details">
+                <p><strong>위도:</strong> ${nodeData.GpsInfo.Lat.toFixed(6)}</p>
+                <p><strong>경도:</strong> ${nodeData.GpsInfo.Long.toFixed(6)}</p>
+                <p><strong>고도:</strong> ${nodeData.GpsInfo.Alt.toFixed(2)}m</p>
+                <p><strong>UTM E:</strong> ${nodeData.UtmInfo.Easting.toFixed(2)}</p>
+                <p><strong>UTM N:</strong> ${nodeData.UtmInfo.Northing.toFixed(2)}</p>
+                <p><strong>Zone:</strong> ${nodeData.UtmInfo.Zone}</p>
+                <p><strong>Maker:</strong> ${nodeData.Maker}</p>
+                <p><strong>Remark:</strong> ${nodeData.Remark}</p>
+            </div>
         `;
+
+        // 삭제 버튼 이벤트 리스너 추가
+        const deleteBtn = document.getElementById('deleteSelectedNode');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => {
+                this.deleteSelectedNode(nodeId);
+            });
+        }
     }
 
     showAddNodeModal(lat, lng) {
@@ -494,6 +509,58 @@ class UIManager {
             
         } catch (error) {
             handleAPIError(error, '링크 삭제 중 오류가 발생했습니다');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    async deleteSelectedNode(nodeId) {
+        if (!confirm(`노드 ${nodeId}와 연결된 모든 링크를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
+            return;
+        }
+
+        try {
+            showLoading();
+            
+            // 1. 서버에서 노드 삭제 (연결된 링크도 자동 삭제됨)
+            await pathAPI.deleteNode(nodeId);
+            
+            // 2. 현재 데이터에서 노드 제거
+            this.currentData.Node = this.currentData.Node.filter(node => node.ID !== nodeId);
+            
+            // 3. 현재 데이터에서 연결된 링크들 제거
+            const removedLinks = this.currentData.Link.filter(link => 
+                link.FromNodeID === nodeId || link.ToNodeID === nodeId
+            );
+            this.currentData.Link = this.currentData.Link.filter(link => 
+                link.FromNodeID !== nodeId && link.ToNodeID !== nodeId
+            );
+            
+            // 4. UI 업데이트
+            this.updateTables();
+            
+            // 5. 지도에서 노드 및 연결된 링크 제거
+            if (window.pathMap) {
+                // 노드 제거
+                window.pathMap.removeNode(nodeId);
+                
+                // 연결된 링크들 제거
+                removedLinks.forEach(link => {
+                    window.pathMap.removeLink(link.ID);
+                });
+            }
+            
+            // 6. 선택된 노드 정보 초기화
+            this.updateSelectedNodeInfo(null, null);
+            
+            const linkCount = removedLinks.length;
+            showNotification(
+                `노드 ${nodeId}와 연결된 링크 ${linkCount}개가 삭제되었습니다.`, 
+                'success'
+            );
+            
+        } catch (error) {
+            handleAPIError(error, '노드 삭제 중 오류가 발생했습니다');
         } finally {
             hideLoading();
         }

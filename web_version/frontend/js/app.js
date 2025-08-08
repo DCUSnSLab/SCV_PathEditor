@@ -228,6 +228,15 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         window.uiManager.setMode('addNode');
     }
+
+    // Delete 또는 Backspace: 선택된 노드 삭제
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey && !e.metaKey) {
+        const selectedNode = window.pathMap?.getSelectedNode();
+        if (selectedNode && selectedNode.data) {
+            e.preventDefault();
+            window.uiManager.deleteSelectedNode(selectedNode.data.ID);
+        }
+    }
 });
 
 // 디버그 및 개발 도우미 함수들 (콘솔에서 사용 가능)
@@ -282,6 +291,7 @@ console.log('  1-4: 모드 변경 (1=Select, 2=Drag, 3=Add, 4=QuickLink)');
 console.log('  Q: QuickLink 모드');
 console.log('  D: Drag 모드');
 console.log('  A: Add Node 모드');
+console.log('  Delete/Backspace: 선택된 노드 삭제');
 console.log('  Ctrl+S: 저장');
 console.log('  Ctrl+O: 열기');
 console.log('  ESC: 취소/닫기');
