@@ -18,13 +18,25 @@ def setup_ui(mw):
     
     # Load/Save 버튼 레이아웃
     ls_layout = QHBoxLayout()
-    mw.load_button = QPushButton("Load")
-    mw.load_button.clicked.connect(mw.load_file)
+    mw.load_button = QPushButton("Load (Merge)")
+    mw.load_button.clicked.connect(lambda: mw.load_file(merge_mode=True))
     ls_layout.addWidget(mw.load_button)
+    
+    mw.load_replace_button = QPushButton("Load (Replace)")
+    mw.load_replace_button.clicked.connect(lambda: mw.load_file(merge_mode=False))
+    ls_layout.addWidget(mw.load_replace_button)
+    
     mw.save_button = QPushButton("Save")
     mw.save_button.clicked.connect(mw.save_file)
     ls_layout.addWidget(mw.save_button)
     mw.left_layout.addLayout(ls_layout)
+    
+    # 데이터 무결성 검사 버튼
+    validate_layout = QHBoxLayout()
+    mw.validate_button = QPushButton("Validate Data")
+    mw.validate_button.clicked.connect(mw.validate_current_data)
+    validate_layout.addWidget(mw.validate_button)
+    mw.left_layout.addLayout(validate_layout)
     
     # Link Add Mode 버튼
     mw.link_add_mode_button = QPushButton("Link add mode")

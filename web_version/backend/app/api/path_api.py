@@ -27,12 +27,35 @@ async def list_files():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/load/{filename}", response_model=PathData)
-async def load_path_data(filename: str):
+@router.post("/load/{filename}")
+async def load_path_data(filename: str, merge_duplicates: bool = True):
     """JSON 파일에서 경로 데이터 로드"""
     try:
-        path_data = path_service.load_path_data(filename)
-        return path_data
+        result = path_service.load_path_data(filename, merge_duplicates)
+        
+        if merge_duplicates and isinstance(result, tuple):
+            # 병합 모드에서는 튜플 반환 (path_data, duplicate_info)
+            path_data, duplicate_info = result
+            
+            response_data = {
+                "Node": [node.dict() for node in path_data.Node],
+                "Link": [link.dict() for link in path_data.Link],
+                "duplicate_info": duplicate_info
+            }
+            
+            # 중복 항목이 있을 경우 경고 메시지 추가
+            if duplicate_info["duplicate_nodes"] or duplicate_info["duplicate_links"]:
+                duplicate_count = len(duplicate_info["duplicate_nodes"]) + len(duplicate_info["duplicate_links"])
+                response_data["message"] = f"파일 로드 완료. {duplicate_count}개의 중복 항목이 무시되었습니다."
+        else:
+            # 교체 모드에서는 PathData 반환
+            path_data = result if not isinstance(result, tuple) else result[0]
+            response_data = {
+                "Node": [node.dict() for node in path_data.Node],
+                "Link": [link.dict() for link in path_data.Link]
+            }
+        
+        return response_data
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"File {filename} not found")
     except Exception as e:
@@ -211,5 +234,28 @@ async def delete_link(link_id: str):
         if not success:
             raise HTTPException(status_code=404, detail=f"Link {link_id} not found")
         return {"message": f"Link {link_id} deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/validate")
+async def validate_data_integrity():
+    """현재 데이터의 무결성 검사"""
+    try:
+        issues = path_service.validate_data_integrity()
+        
+        has_issues = any(issues[key] for key in issues)
+        
+        return {
+            "valid": not has_issues,
+            "issues": issues,
+            "summary": {
+                "total_nodes": len(path_service.current_nodes),
+                "total_links": len(path_service.current_links),
+                "duplicate_nodes": len(issues["duplicate_node_ids"]),
+                "duplicate_links": len(issues["duplicate_link_ids"]),
+                "orphaned_links": len(issues["orphaned_links"])
+            }
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

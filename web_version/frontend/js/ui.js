@@ -160,13 +160,40 @@ class UIManager {
     async loadPathData(filename) {
         try {
             showLoading();
-            const pathData = await pathAPI.loadPathData(filename);
+            const response = await pathAPI.loadPathData(filename);
             
-            this.currentData = pathData;
+            // 응답에서 실제 경로 데이터 추출
+            this.currentData = {
+                Node: response.Node || [],
+                Link: response.Link || []
+            };
+            
             this.updateTables();
             this.updateMap();
             
-            showNotification(`${filename} 파일이 로드되었습니다`, 'success');
+            // 중복 처리 결과 메시지 표시
+            if (response.duplicate_info) {
+                const duplicateInfo = response.duplicate_info;
+                const duplicateCount = duplicateInfo.duplicate_nodes.length + duplicateInfo.duplicate_links.length;
+                
+                if (duplicateCount > 0) {
+                    const detailMessage = this.buildDuplicateMessage(duplicateInfo);
+                    showNotification(
+                        `${filename} 파일이 로드되었습니다.\n${duplicateCount}개의 중복 항목이 무시되었습니다.`,
+                        'warning'
+                    );
+                    
+                    // 상세 정보를 콘솔에 출력
+                    console.log('중복 항목 상세 정보:', detailMessage);
+                    
+                    // 사용자에게 상세 정보를 보여줄 수 있는 모달 표시
+                    this.showDuplicateInfoModal(duplicateInfo, filename);
+                } else {
+                    showNotification(`${filename} 파일이 로드되었습니다`, 'success');
+                }
+            } else {
+                showNotification(`${filename} 파일이 로드되었습니다`, 'success');
+            }
             
         } catch (error) {
             handleAPIError(error, '파일 로드 중 오류가 발생했습니다');
@@ -583,6 +610,151 @@ class UIManager {
         const modal = document.getElementById(modalId);
         if (modal) {
             modal.style.display = 'none';
+        }
+    }
+
+    buildDuplicateMessage(duplicateInfo) {
+        const messages = [];
+        
+        if (duplicateInfo.duplicate_nodes.length > 0) {
+            messages.push(`중복 노드 ID (${duplicateInfo.duplicate_nodes.length}개): ${duplicateInfo.duplicate_nodes.join(', ')}`);
+        }
+        
+        if (duplicateInfo.duplicate_links.length > 0) {
+            messages.push(`중복 링크 ID (${duplicateInfo.duplicate_links.length}개): ${duplicateInfo.duplicate_links.join(', ')}`);
+        }
+        
+        messages.push(`총 처리된 노드: ${duplicateInfo.total_nodes_processed}개`);
+        messages.push(`총 처리된 링크: ${duplicateInfo.total_links_processed}개`);
+        messages.push(`추가된 노드: ${duplicateInfo.nodes_added || 0}개`);
+        messages.push(`추가된 링크: ${duplicateInfo.links_added || 0}개`);
+        
+        return messages.join('\n');
+    }
+
+    showDuplicateInfoModal(duplicateInfo, filename) {
+        // 기존 중복 정보 모달이 없다면 동적으로 생성
+        let modal = document.getElementById('duplicateInfoModal');
+        if (!modal) {
+            modal = this.createDuplicateInfoModal();
+            document.body.appendChild(modal);
+        }
+
+        // 모달 내용 업데이트
+        const content = modal.querySelector('.modal-body');
+        const duplicateCount = duplicateInfo.duplicate_nodes.length + duplicateInfo.duplicate_links.length;
+        
+        let htmlContent = `
+            <div class="duplicate-summary">
+                <h4>파일 로드 결과: ${filename}</h4>
+                <p><strong>총 ${duplicateCount}개의 중복 항목이 발견되어 무시되었습니다.</strong></p>
+            </div>
+        `;
+
+        if (duplicateInfo.duplicate_nodes.length > 0) {
+            htmlContent += `
+                <div class="duplicate-section">
+                    <h5>중복 노드 ID (${duplicateInfo.duplicate_nodes.length}개)</h5>
+                    <div class="duplicate-list">
+                        ${duplicateInfo.duplicate_nodes.map(id => `<span class="duplicate-item">${id}</span>`).join(' ')}
+                    </div>
+                </div>
+            `;
+        }
+
+        if (duplicateInfo.duplicate_links.length > 0) {
+            htmlContent += `
+                <div class="duplicate-section">
+                    <h5>중복 링크 ID (${duplicateInfo.duplicate_links.length}개)</h5>
+                    <div class="duplicate-list">
+                        ${duplicateInfo.duplicate_links.map(id => `<span class="duplicate-item">${id}</span>`).join(' ')}
+                    </div>
+                </div>
+            `;
+        }
+
+        htmlContent += `
+            <div class="duplicate-stats">
+                <h5>처리 통계</h5>
+                <ul>
+                    <li>총 처리된 노드: ${duplicateInfo.total_nodes_processed}개</li>
+                    <li>총 처리된 링크: ${duplicateInfo.total_links_processed}개</li>
+                    <li>실제 추가된 노드: ${duplicateInfo.nodes_added || 0}개</li>
+                    <li>실제 추가된 링크: ${duplicateInfo.links_added || 0}개</li>
+                </ul>
+            </div>
+        `;
+
+        content.innerHTML = htmlContent;
+        
+        // 자동으로 5초 후 모달 닫기
+        setTimeout(() => {
+            this.hideModal('duplicateInfoModal');
+        }, 8000);
+        
+        this.showModal('duplicateInfoModal');
+    }
+
+    createDuplicateInfoModal() {
+        const modal = document.createElement('div');
+        modal.id = 'duplicateInfoModal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>중복 항목 처리 결과</h3>
+                    <span class="close">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <!-- 내용이 동적으로 삽입됩니다 -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" onclick="window.uiManager.hideModal('duplicateInfoModal')">확인</button>
+                </div>
+            </div>
+        `;
+
+        // 닫기 버튼 이벤트 추가
+        const closeBtn = modal.querySelector('.close');
+        closeBtn.addEventListener('click', () => {
+            this.hideModal('duplicateInfoModal');
+        });
+
+        // 모달 외부 클릭 시 닫기
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.hideModal('duplicateInfoModal');
+            }
+        });
+
+        return modal;
+    }
+
+    async validateDataIntegrity() {
+        try {
+            const result = await pathAPI.validateDataIntegrity();
+            
+            if (result.valid) {
+                showNotification('데이터 무결성 검사 통과', 'success');
+            } else {
+                let message = '데이터 무결성 문제 발견:\n';
+                if (result.issues.duplicate_node_ids.length > 0) {
+                    message += `- 중복 노드 ID: ${result.issues.duplicate_node_ids.length}개\n`;
+                }
+                if (result.issues.duplicate_link_ids.length > 0) {
+                    message += `- 중복 링크 ID: ${result.issues.duplicate_link_ids.length}개\n`;
+                }
+                if (result.issues.orphaned_links.length > 0) {
+                    message += `- 고아 링크: ${result.issues.orphaned_links.length}개\n`;
+                }
+                
+                showNotification(message, 'warning');
+                console.log('데이터 무결성 검사 결과:', result);
+            }
+            
+            return result;
+        } catch (error) {
+            handleAPIError(error, '데이터 무결성 검사 중 오류가 발생했습니다');
         }
     }
 }

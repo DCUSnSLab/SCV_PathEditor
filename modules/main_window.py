@@ -8,7 +8,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from modules.ui_setup import setup_ui
 from modules.model import Node, Link, GpsInfo, UtmInfo
 from modules.map_viewer import MapCanvas
-from modules.util import json_to_links, json_to_nodes
+from modules.util import json_to_links, json_to_nodes, json_to_data_with_merge, validate_data_integrity
 from dataclasses import asdict
 
 class MainWindow(QMainWindow):
@@ -24,21 +24,52 @@ class MainWindow(QMainWindow):
         self.selected_node = None
         setup_ui(self)
     
-    def load_file(self):
+    def load_file(self, merge_mode=True):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         default_path = os.path.join(base_dir, '..', 'data', 'path')
         os.makedirs(default_path, exist_ok=True)
+        
         file_name, _ = QFileDialog.getOpenFileName(
             self, "JSON 파일 열기", default_path, "JSON Files (*.json);;All Files (*)"
         )
+        
         if file_name:
-            with open(file_name, 'r', encoding='utf-8') as file:
-                json_data = json.load(file)
-            self.nodes = json_to_nodes(json_data)
-            self.links = json_to_links(json_data)
-            self.populate_node_table()
-            self.populate_link_table()
-            self.display_map()
+            try:
+                with open(file_name, 'r', encoding='utf-8') as file:
+                    json_data = json.load(file)
+                
+                if merge_mode and (self.nodes or self.links):
+                    # 기존 데이터와 병합 모드
+                    merged_nodes, merged_links, duplicate_info = json_to_data_with_merge(
+                        json_data, self.nodes, self.links
+                    )
+                    
+                    # 결과 업데이트
+                    self.nodes = merged_nodes
+                    self.links = merged_links
+                    
+                    # 중복 처리 결과 표시
+                    self.show_duplicate_info(file_name, duplicate_info)
+                    
+                else:
+                    # 기존 데이터 완전 교체 모드
+                    self.nodes = json_to_nodes(json_data)
+                    self.links = json_to_links(json_data)
+                    QMessageBox.information(
+                        self, "파일 로드 완료", 
+                        f"'{os.path.basename(file_name)}' 파일이 로드되었습니다.\n"
+                        f"노드: {len(self.nodes)}개, 링크: {len(self.links)}개"
+                    )
+                
+                self.populate_node_table()
+                self.populate_link_table()
+                self.display_map()
+                
+            except Exception as e:
+                QMessageBox.critical(
+                    self, "파일 로드 오류", 
+                    f"파일을 로드하는 중 오류가 발생했습니다:\n{str(e)}"
+                )
         
     def update_nodes_from_table(self):
         # 테이블에서 수정된 Node 데이터를 self.nodes에 반영
@@ -488,6 +519,76 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "QuickLink 오류", f"링크 생성 중 오류가 발생했습니다:\n{str(e)}")
             print(f"QuickLink 오류: {e}")
+
+    def show_duplicate_info(self, filename, duplicate_info):
+        """중복 처리 결과 정보 표시"""
+        duplicate_count = len(duplicate_info["duplicate_nodes"]) + len(duplicate_info["duplicate_links"])
+        
+        if duplicate_count > 0:
+            message = f"'{os.path.basename(filename)}' 파일 병합 완료\n\n"
+            message += f"📊 처리 결과:\n"
+            message += f"• 총 처리된 노드: {duplicate_info['total_nodes_processed']}개\n"
+            message += f"• 총 처리된 링크: {duplicate_info['total_links_processed']}개\n"
+            message += f"• 추가된 노드: {duplicate_info['nodes_added']}개\n"
+            message += f"• 추가된 링크: {duplicate_info['links_added']}개\n\n"
+            
+            message += f"⚠️ 중복으로 무시된 항목 ({duplicate_count}개):\n"
+            
+            if duplicate_info["duplicate_nodes"]:
+                message += f"• 중복 노드 ID: {', '.join(duplicate_info['duplicate_nodes'])}\n"
+            
+            if duplicate_info["duplicate_links"]:
+                message += f"• 중복 링크 ID: {', '.join(duplicate_info['duplicate_links'])}\n"
+            
+            message += f"\n현재 총 노드: {len(self.nodes)}개, 총 링크: {len(self.links)}개"
+            
+            QMessageBox.warning(self, "파일 병합 결과", message)
+        else:
+            QMessageBox.information(
+                self, "파일 병합 완료", 
+                f"'{os.path.basename(filename)}' 파일이 성공적으로 병합되었습니다.\n"
+                f"추가된 노드: {duplicate_info['nodes_added']}개, 추가된 링크: {duplicate_info['links_added']}개\n"
+                f"현재 총 노드: {len(self.nodes)}개, 총 링크: {len(self.links)}개"
+            )
+
+    def validate_current_data(self):
+        """현재 데이터의 무결성 검사"""
+        try:
+            issues = validate_data_integrity(self.nodes, self.links)
+            
+            has_issues = any(issues[key] for key in issues)
+            
+            if has_issues:
+                message = "데이터 무결성 문제가 발견되었습니다:\n\n"
+                
+                if issues["duplicate_node_ids"]:
+                    message += f"🔴 중복 노드 ID ({len(issues['duplicate_node_ids'])}개):\n"
+                    message += f"   {', '.join(issues['duplicate_node_ids'])}\n\n"
+                
+                if issues["duplicate_link_ids"]:
+                    message += f"🔴 중복 링크 ID ({len(issues['duplicate_link_ids'])}개):\n"
+                    message += f"   {', '.join(issues['duplicate_link_ids'])}\n\n"
+                
+                if issues["orphaned_links"]:
+                    message += f"🔴 고아 링크 ({len(issues['orphaned_links'])}개):\n"
+                    for orphan in issues["orphaned_links"]:
+                        message += f"   {orphan}\n"
+                
+                QMessageBox.warning(self, "데이터 무결성 검사", message)
+            else:
+                QMessageBox.information(
+                    self, "데이터 무결성 검사", 
+                    f"✅ 데이터 무결성 검사 통과\n\n"
+                    f"총 노드: {len(self.nodes)}개\n"
+                    f"총 링크: {len(self.links)}개\n"
+                    f"모든 데이터가 정상입니다."
+                )
+                
+        except Exception as e:
+            QMessageBox.critical(
+                self, "검사 오류", 
+                f"데이터 무결성 검사 중 오류가 발생했습니다:\n{str(e)}"
+            )
 
     def populate_node_table(self):
         self.node_table.setRowCount(len(self.nodes))

@@ -639,3 +639,83 @@ body {
 .mt-1 { margin-top: 0.5rem; }
 .mt-2 { margin-top: 1rem; }
 .mt-3 { margin-top: 1.5rem; }
+
+/* 중복 정보 모달 스타일 */
+.duplicate-summary {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.duplicate-summary h4 {
+    color: #856404;
+    margin-bottom: 0.5rem;
+}
+
+.duplicate-summary p {
+    color: #856404;
+    margin: 0;
+}
+
+.duplicate-section {
+    margin-bottom: 1.5rem;
+}
+
+.duplicate-section h5 {
+    color: #495057;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 0.25rem;
+}
+
+.duplicate-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.duplicate-item {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    border: 1px solid #f5c6cb;
+}
+
+.duplicate-stats {
+    background: #e7f3ff;
+    border: 1px solid #b8daff;
+    border-radius: 6px;
+    padding: 1rem;
+}
+
+.duplicate-stats h5 {
+    color: #004085;
+    margin-bottom: 0.75rem;
+}
+
+.duplicate-stats ul {
+    margin: 0;
+    padding-left: 1.5rem;
+    color: #004085;
+}
+
+.duplicate-stats li {
+    margin-bottom: 0.25rem;
+}
+
+/* 중복 정보 모달의 특별한 스타일 */
+#duplicateInfoModal .modal-content {
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+#duplicateInfoModal .modal-body {
+    max-height: 60vh;
+    overflow-y: auto;
+}

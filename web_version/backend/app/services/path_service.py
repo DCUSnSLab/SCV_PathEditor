@@ -18,7 +18,7 @@ class PathService:
         self.current_nodes: List[Node] = []
         self.current_links: List[Link] = []
     
-    def load_path_data(self, filename: str) -> PathData:
+    def load_path_data(self, filename: str, merge_duplicates: bool = True) -> PathData:
         """JSON 파일에서 경로 데이터 로드"""
         file_path = os.path.join(self.data_dir, filename)
         
@@ -28,14 +28,45 @@ class PathService:
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
-        # 노드 및 링크 파싱
-        nodes = [Node(**node_data) for node_data in data.get("Node", [])]
-        links = [Link(**link_data) for link_data in data.get("Link", [])]
+        # 새로운 노드 및 링크 파싱
+        new_nodes = [Node(**node_data) for node_data in data.get("Node", [])]
+        new_links = [Link(**link_data) for link_data in data.get("Link", [])]
         
-        self.current_nodes = nodes
-        self.current_links = links
-        
-        return PathData(Node=nodes, Link=links)
+        if merge_duplicates:
+            # 기존 개수 저장 (업데이트 전에)
+            original_node_count = len(self.current_nodes)
+            original_link_count = len(self.current_links)
+            
+            # 중복 ID 처리하여 기존 데이터와 병합
+            merged_nodes, duplicate_nodes = self._merge_nodes_with_duplicates(new_nodes)
+            merged_links, duplicate_links = self._merge_links_with_duplicates(new_links, merged_nodes)
+            
+            # 추가된 개수 계산
+            nodes_added = len(merged_nodes) - original_node_count
+            links_added = len(merged_links) - original_link_count
+            
+            self.current_nodes = merged_nodes
+            self.current_links = merged_links
+            
+            # PathData 객체와 중복 정보를 별도로 반환
+            path_data = PathData(Node=merged_nodes, Link=merged_links)
+            
+            duplicate_info = {
+                "duplicate_nodes": [node.ID for node in duplicate_nodes],
+                "duplicate_links": [link.ID for link in duplicate_links],
+                "total_nodes_processed": len(new_nodes),
+                "total_links_processed": len(new_links),
+                "nodes_added": nodes_added,
+                "links_added": links_added
+            }
+            
+            # 결과를 튜플로 반환
+            return path_data, duplicate_info
+        else:
+            # 기존 데이터 완전 교체
+            self.current_nodes = new_nodes
+            self.current_links = new_links
+            return PathData(Node=new_nodes, Link=new_links)
     
     def save_path_data(self, filename: str, path_data: PathData) -> str:
         """경로 데이터를 JSON 파일로 저장"""
@@ -207,3 +238,84 @@ class PathService:
                 files.append(file)
         
         return sorted(files)
+    
+    def _merge_nodes_with_duplicates(self, new_nodes: List[Node]) -> tuple[List[Node], List[Node]]:
+        """새로운 노드들을 기존 노드들과 병합하면서 중복 ID 처리"""
+        existing_node_ids = {node.ID for node in self.current_nodes}
+        duplicate_nodes = []
+        unique_new_nodes = []
+        
+        for new_node in new_nodes:
+            if new_node.ID in existing_node_ids:
+                duplicate_nodes.append(new_node)
+                print(f"중복 노드 ID 발견, 무시됨: {new_node.ID}")
+            else:
+                unique_new_nodes.append(new_node)
+                existing_node_ids.add(new_node.ID)
+        
+        # 기존 노드들과 새로운 고유 노드들을 병합
+        merged_nodes = self.current_nodes + unique_new_nodes
+        
+        return merged_nodes, duplicate_nodes
+    
+    def _merge_links_with_duplicates(self, new_links: List[Link], all_nodes: List[Node]) -> tuple[List[Link], List[Link]]:
+        """새로운 링크들을 기존 링크들과 병합하면서 중복 ID 처리"""
+        existing_link_ids = {link.ID for link in self.current_links}
+        node_id_set = {node.ID for node in all_nodes}
+        duplicate_links = []
+        unique_new_links = []
+        
+        for new_link in new_links:
+            if new_link.ID in existing_link_ids:
+                duplicate_links.append(new_link)
+                print(f"중복 링크 ID 발견, 무시됨: {new_link.ID}")
+            else:
+                # FromNodeID와 ToNodeID가 존재하는지 확인
+                if new_link.FromNodeID in node_id_set and new_link.ToNodeID in node_id_set:
+                    unique_new_links.append(new_link)
+                    existing_link_ids.add(new_link.ID)
+                else:
+                    print(f"링크 {new_link.ID}의 참조 노드가 존재하지 않아 무시됨: {new_link.FromNodeID} -> {new_link.ToNodeID}")
+                    duplicate_links.append(new_link)  # 참조 에러도 중복으로 처리
+        
+        # 기존 링크들과 새로운 고유 링크들을 병합
+        merged_links = self.current_links + unique_new_links
+        
+        return merged_links, duplicate_links
+    
+    def validate_data_integrity(self) -> dict:
+        """데이터 무결성 검사"""
+        issues = {
+            "duplicate_node_ids": [],
+            "duplicate_link_ids": [],
+            "orphaned_links": [],
+            "invalid_references": []
+        }
+        
+        # 노드 ID 중복 검사
+        node_ids = [node.ID for node in self.current_nodes]
+        seen_node_ids = set()
+        for node_id in node_ids:
+            if node_id in seen_node_ids:
+                issues["duplicate_node_ids"].append(node_id)
+            else:
+                seen_node_ids.add(node_id)
+        
+        # 링크 ID 중복 검사
+        link_ids = [link.ID for link in self.current_links]
+        seen_link_ids = set()
+        for link_id in link_ids:
+            if link_id in seen_link_ids:
+                issues["duplicate_link_ids"].append(link_id)
+            else:
+                seen_link_ids.add(link_id)
+        
+        # 고아 링크 검사 (참조하는 노드가 존재하지 않는 링크)
+        node_id_set = set(node_ids)
+        for link in self.current_links:
+            if link.FromNodeID not in node_id_set:
+                issues["orphaned_links"].append(f"Link {link.ID}: FromNode {link.FromNodeID} not found")
+            if link.ToNodeID not in node_id_set:
+                issues["orphaned_links"].append(f"Link {link.ID}: ToNode {link.ToNodeID} not found")
+        
+        return issues

@@ -119,6 +119,11 @@ class PathAPI {
             method: 'DELETE'
         });
     }
+
+    // 데이터 무결성 검사 API
+    async validateDataIntegrity() {
+        return await this.request('/validate');
+    }
 }
 
 // 전역 API 인스턴스
