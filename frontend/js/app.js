@@ -172,63 +172,7 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
-// 키보드 단축키
-document.addEventListener('keydown', (e) => {
-    if (!window.scvApp || !window.scvApp.isReady()) return;
 
-    // Ctrl/Cmd + S: 저장
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        window.uiManager.showSaveModal();
-    }
-
-    // Ctrl/Cmd + O: 열기
-    if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
-        e.preventDefault();
-        window.uiManager.loadFile();
-    }
-
-    // ESC: 모달 닫기 또는 선택 해제
-    if (e.key === 'Escape') {
-        // 모달이 열려있으면 닫기
-        const openModal = document.querySelector('.modal[style*="block"]');
-        if (openModal) {
-            window.uiManager.hideModal(openModal.id);
-            return;
-        }
-
-        // QuickLink 선택 상태 초기화
-        if (window.pathMap && window.pathMap.mode === 'quickLink') {
-            window.pathMap.resetQuickLinkSelection();
-        }
-    }
-
-    // 숫자 키로 모드 변경
-    const modes = ['select', 'drag', 'addNode', 'quickLink'];
-    const keyNum = parseInt(e.key);
-    if (keyNum >= 1 && keyNum <= 4) {
-        e.preventDefault();
-        window.uiManager.setMode(modes[keyNum - 1]);
-    }
-
-    // Q: QuickLink 모드
-    if (e.key.toLowerCase() === 'q' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        window.uiManager.setMode('quickLink');
-    }
-
-    // D: 드래그 모드
-    if (e.key.toLowerCase() === 'd' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        window.uiManager.setMode('drag');
-    }
-
-    // A: 노드 추가 모드
-    if (e.key.toLowerCase() === 'a' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        window.uiManager.setMode('addNode');
-    }
-});
 
 // 디버그 및 개발 도우미 함수들 (콘솔에서 사용 가능)
 window.debug = {
@@ -277,11 +221,3 @@ window.debug = {
 
 console.log('SCV Path Editor Web 로드됨');
 console.log('디버그 명령어: window.debug');
-console.log('키보드 단축키:');
-console.log('  1-4: 모드 변경 (1=Select, 2=Drag, 3=Add, 4=QuickLink)');
-console.log('  Q: QuickLink 모드');
-console.log('  D: Drag 모드');
-console.log('  A: Add Node 모드');
-console.log('  Ctrl+S: 저장');
-console.log('  Ctrl+O: 열기');
-console.log('  ESC: 취소/닫기');
