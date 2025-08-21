@@ -33,6 +33,10 @@ class UIManager {
             this.setMode('quickLink');
         });
 
+        document.getElementById('intervalCreateModeBtn').addEventListener('click', () => {
+            this.setMode('intervalCreate');
+        });
+
         // 파일 관련 버튼들
         document.getElementById('loadBtn').addEventListener('click', () => {
             this.loadFile();
@@ -131,7 +135,8 @@ class UIManager {
             'select': 'selectModeBtn',
             'drag': 'dragModeBtn',
             'addNode': 'addNodeModeBtn',
-            'quickLink': 'quickLinkModeBtn'
+            'quickLink': 'quickLinkModeBtn',
+            'intervalCreate': 'intervalCreateModeBtn'
         };
 
         if (modeButtons[mode]) {
@@ -148,7 +153,8 @@ class UIManager {
             'select': '노드 선택 모드',
             'drag': '노드 드래그 모드 - 노드를 드래그하여 위치를 변경할 수 있습니다',
             'addNode': '노드 추가 모드 - 지도를 클릭하여 새 노드를 추가하세요',
-            'quickLink': 'QuickLink 모드 - 두 노드를 순서대로 클릭하여 링크를 생성하세요'
+            'quickLink': 'QuickLink 모드 - 두 노드를 순서대로 클릭하여 링크를 생성하세요',
+            'intervalCreate': '구간 노드 생성 모드 - 시작점을 클릭하세요'
         };
 
         showNotification(messages[mode] || '모드 변경됨', 'info');

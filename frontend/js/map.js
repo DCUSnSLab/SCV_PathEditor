@@ -8,6 +8,11 @@ class PathMap {
         this.selectedNode = null;
         this.mode = 'select'; // select, drag, addNode, quickLink
         this.quickLinkFirstNode = null;
+
+        // 구간 노드 생성 관련 변수
+        this.intervalCreateStartPos = null;
+        this.tempLine = null;
+        this.tempMouseMoveMarker = null;
         
         // 이벤트 콜백
         this.onNodeSelect = null;
@@ -108,6 +113,8 @@ class PathMap {
             this.handleAddNodeClick(lat, lng);
         } else if (this.mode === 'quickLink') {
             this.handleQuickLinkClick(e);
+        } else if (this.mode === 'intervalCreate') {
+            this.handleIntervalCreateClick(e.latlng);
         }
         
         if (this.onMapClick) {
@@ -225,7 +232,13 @@ class PathMap {
         const mapContainer = this.map.getContainer();
         mapContainer.style.cursor = mode === 'drag' ? 'move' : 
                                    mode === 'addNode' ? 'crosshair' : 
-                                   mode === 'quickLink' ? 'pointer' : 'default';
+                                   mode === 'quickLink' ? 'pointer' : 
+                                   mode === 'intervalCreate' ? 'crosshair' : 'default';
+        
+        // 다른 모드로 변경 시 구간 생성 상태 초기화
+        if (mode !== 'intervalCreate') {
+            this.resetIntervalCreate();
+        }
         
         // QuickLink 모드가 아닐 때 선택 상태 초기화
         if (mode !== 'quickLink') {
@@ -623,5 +636,130 @@ class PathMap {
 
     getSelectedNode() {
         return this.selectedNode ? this.nodes.get(this.selectedNode) : null;
+    }
+
+    // --- 구간 노드 생성 관련 함수들 ---
+
+    handleIntervalCreateClick(latlng) {
+        if (!this.intervalCreateStartPos) {
+            // 시작점 설정
+            this.intervalCreateStartPos = latlng;
+            
+            // 임시 마커 추가
+            this.tempStartMarker = L.circleMarker(latlng, { color: '#00ff00', radius: 8 }).addTo(this.map);
+            showNotification('시작점이 선택되었습니다. 끝점을 클릭하세요.', 'info');
+
+            // 마우스 이동에 따른 임시 라인 표시 시작
+            this.map.on('mousemove', this.drawTempLine, this);
+
+        } else {
+            // 끝점 설정 및 노드 생성 실행
+            this.map.off('mousemove', this.drawTempLine, this); // 마우스 이동 이벤트 리스너 제거
+            this.generateNodesAlongLine(this.intervalCreateStartPos, latlng);
+            this.resetIntervalCreate();
+        }
+    }
+
+    drawTempLine(e) {
+        if (!this.intervalCreateStartPos) return;
+
+        if (this.tempLine) {
+            this.map.removeLayer(this.tempLine);
+        }
+
+        this.tempLine = L.polyline([this.intervalCreateStartPos, e.latlng], {
+            color: '#00ff00',
+            dashArray: '5, 10'
+        }).addTo(this.map);
+    }
+
+    resetIntervalCreate() {
+        if (this.tempStartMarker) {
+            this.map.removeLayer(this.tempStartMarker);
+            this.tempStartMarker = null;
+        }
+        if (this.tempLine) {
+            this.map.removeLayer(this.tempLine);
+            this.tempLine = null;
+        }
+        this.intervalCreateStartPos = null;
+        this.map.off('mousemove', this.drawTempLine, this);
+    }
+
+    async generateNodesAlongLine(startLatLng, endLatLng) {
+        const intervalMeters = parseFloat(document.getElementById('nodeInterval').value);
+        if (isNaN(intervalMeters) || intervalMeters <= 0) {
+            showNotification('유효한 구간 간격을 입력하세요.', 'error');
+            return;
+        }
+
+        showLoading();
+
+        try {
+            // 1. 시작점과 끝점의 UTM 좌표 얻기
+            const startUtm = await pathAPI.latLngToUtm(startLatLng.lat, startLatLng.lng);
+            const endUtm = await pathAPI.latLngToUtm(endLatLng.lat, endLatLng.lng);
+
+            if (startUtm.zone_number !== endUtm.zone_number || startUtm.zone_letter !== endUtm.zone_letter) {
+                throw new Error('시작점과 끝점이 다른 UTM Zone에 속해있어 계산할 수 없습니다.');
+            }
+
+            // 2. 총 거리와 방향 벡터 계산
+            const dx = endUtm.easting - startUtm.easting;
+            const dy = endUtm.northing - startUtm.northing;
+            const totalDistance = Math.sqrt(dx * dx + dy * dy);
+            const unitVector = { x: dx / totalDistance, y: dy / totalDistance };
+
+            // 3. 생성할 노드 개수 계산
+            const nodeCount = Math.floor(totalDistance / intervalMeters);
+            if (nodeCount < 1) {
+                showNotification('선택한 거리가 너무 짧아 노드를 생성할 수 없습니다.', 'warning');
+                return;
+            }
+
+            // 4. 노드 생성
+            const newNodes = [];
+            for (let i = 1; i <= nodeCount; i++) {
+                const newEasting = startUtm.easting + unitVector.x * i * intervalMeters;
+                const newNorthing = startUtm.northing + unitVector.y * i * intervalMeters;
+
+                const newLatLng = await pathAPI.utmToLatLng(newEasting, newNorthing, startUtm.zone_number, startUtm.zone_letter);
+                
+                const nodeData = {
+                    GpsInfo: { Lat: newLatLng.lat, Long: newLatLng.lng, Alt: 0 },
+                    UtmInfo: { Easting: newEasting, Northing: newNorthing, Zone: `${startUtm.zone_number}${startUtm.zone_letter}` },
+                    Maker: 'IntervalCreate',
+                    Remark: `${i * intervalMeters}m 지점`
+                };
+
+                const createdNode = await pathAPI.createNode(nodeData);
+                this.addNode(createdNode);
+                uiManager.currentData.Node.push(createdNode);
+                newNodes.push(createdNode);
+            }
+            uiManager.updateNodeTable();
+
+            // 5. 링크 생성
+            for (let i = 0; i < newNodes.length - 1; i++) {
+                const fromNode = newNodes[i];
+                const toNode = newNodes[i + 1];
+                const linkData = { 
+                    FromNodeID: fromNode.ID, 
+                    ToNodeID: toNode.ID, 
+                    Length: intervalMeters / 1000 // km 단위로 변환
+                };
+                const createdLink = await pathAPI.createLink(linkData);
+                this.addLink(createdLink);
+                uiManager.currentData.Link.push(createdLink);
+            }
+            uiManager.updateLinkTable();
+
+            showNotification(`${nodeCount}개의 노드와 ${nodeCount - 1}개의 링크가 생성되었습니다.`, 'success');
+
+        } catch (error) {
+            handleAPIError(error, '구간 노드 생성 중 오류가 발생했습니다.');
+        } finally {
+            hideLoading();
+        }
     }
 }

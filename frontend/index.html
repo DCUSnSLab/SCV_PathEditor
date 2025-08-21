@@ -36,6 +36,7 @@
                         <button id="dragModeBtn" class="btn btn-mode">Drag Node</button>
                         <button id="addNodeModeBtn" class="btn btn-mode">Add Node</button>
                         <button id="quickLinkModeBtn" class="btn btn-mode">Quick Link</button>
+                        <button id="intervalCreateModeBtn" class="btn btn-mode">구간 노드 생성</button>
                     </div>
                 </div>
 
@@ -51,6 +52,10 @@
                             <option value="street" selected>일반 지도</option>
                             <option value="satellite">위성 지도</option>
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="nodeInterval">구간 간격 (m):</label>
+                        <input type="number" id="nodeInterval" class="form-control" value="10" min="1">
                     </div>
                 </div>
 

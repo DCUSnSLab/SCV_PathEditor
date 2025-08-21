@@ -119,6 +119,34 @@ class PathAPI {
             method: 'DELETE'
         });
     }
+
+    // 좌표 변환 API
+    async latLngToUtm(lat, lng) {
+        // 이 함수는 /api/coords 접두사를 사용하므로 this.request를 직접 사용하지 않음
+        const response = await fetch('/api/coords/latlng-to-utm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat, lng })
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        return response.json();
+    }
+
+    async utmToLatLng(easting, northing, zone_number, zone_letter) {
+        const response = await fetch('/api/coords/utm-to-latlng', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ easting, northing, zone_number, zone_letter })
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        return response.json();
+    }
 }
 
 // 전역 API 인스턴스

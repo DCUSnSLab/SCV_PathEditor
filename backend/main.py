@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 
 from app.api.path_api import router as path_router
+from app.api.coords_api import router as coords_router
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -23,6 +24,7 @@ app.add_middleware(
 
 # API 라우터 등록
 app.include_router(path_router)
+app.include_router(coords_router)
 
 # 정적 파일 서빙 (프론트엔드)
 frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")

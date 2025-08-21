@@ -96,7 +96,6 @@ class SCVPathEditor {
             const files = await pathAPI.listFiles();
             if (files.includes('examplePath.json')) {
                 await this.ui.loadPathData('examplePath.json');
-                this.ui.fileSelect.value = 'examplePath.json';
             }
         } catch (error) {
             console.log('예시 데이터 로드 실패 (정상적인 상황일 수 있음):', error.message);
