@@ -20,8 +20,22 @@ class PathMap {
         this.draggedMarker = null;
         this.draggedNodeId = null;
         this.dragUpdateTimeout = null;
+
+        this.showNodeIds = true; // 노드 ID 표시 여부 플래그
         
         this.initMap();
+    }
+
+    toggleNodeLabels(visible) {
+        this.showNodeIds = visible;
+        this.nodes.forEach(nodeInfo => {
+            const marker = nodeInfo.marker;
+            if (visible) {
+                marker.openTooltip();
+            } else {
+                marker.closeTooltip();
+            }
+        });
     }
 
     initMap() {
@@ -241,6 +255,10 @@ class PathMap {
         }).setContent(ID);
 
         marker.bindTooltip(label);
+
+        if (this.showNodeIds) {
+            marker.openTooltip();
+        }
 
         // 팝업 추가
         const popupContent = `

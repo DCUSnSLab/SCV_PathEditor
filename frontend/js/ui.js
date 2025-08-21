@@ -54,6 +54,13 @@ class UIManager {
             this.uploadFile(e.target.files[0]);
         });
 
+        // 지도 옵션
+        document.getElementById('toggleNodeIds').addEventListener('change', (e) => {
+            if (window.pathMap) {
+                window.pathMap.toggleNodeLabels(e.target.checked);
+            }
+        });
+
         // 파일 선택은 이제 파일 탐색기에서 처리
 
         // 모달 관련
