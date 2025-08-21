@@ -626,3 +626,12 @@ body {
     cursor: pointer;
     font-size: 0.9rem;
 }
+
+.form-control {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    background-color: white;
+}

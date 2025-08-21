@@ -61,6 +61,12 @@ class UIManager {
             }
         });
 
+        document.getElementById('mapStyleSelect').addEventListener('change', (e) => {
+            if (window.pathMap) {
+                window.pathMap.setMapStyle(e.target.value);
+            }
+        });
+
         // 파일 선택은 이제 파일 탐색기에서 처리
 
         // 모달 관련

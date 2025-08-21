@@ -26,6 +26,21 @@ class PathMap {
         this.initMap();
     }
 
+    setMapStyle(styleName) {
+        if (!this.tileLayers || !this.tileLayers[styleName]) {
+            console.error(`Map style '${styleName}' not found.`);
+            return;
+        }
+
+        // 모든 타일 레이어 제거
+        for (const key in this.tileLayers) {
+            this.map.removeLayer(this.tileLayers[key]);
+        }
+
+        // 선택된 타일 레이어 추가
+        this.map.addLayer(this.tileLayers[styleName]);
+    }
+
     toggleNodeLabels(visible) {
         this.showNodeIds = visible;
         this.nodes.forEach(nodeInfo => {
@@ -51,11 +66,20 @@ class PathMap {
             attributionControl: true
         });
 
-        // 타일 레이어 추가 (OpenStreetMap)
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19
-        }).addTo(this.map);
+        // 타일 레이어 정의
+        this.tileLayers = {
+            street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }),
+            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+                maxZoom: 19
+            })
+        };
+
+        // 기본 타일 레이어 추가
+        this.tileLayers.street.addTo(this.map);
 
         // 지도 클릭 이벤트
         this.map.on('click', (e) => {
@@ -260,16 +284,7 @@ class PathMap {
             marker.openTooltip();
         }
 
-        // 팝업 추가
-        const popupContent = `
-            <div>
-                <strong>Node: ${ID}</strong><br>
-                위도: ${GpsInfo.Lat.toFixed(6)}<br>
-                경도: ${GpsInfo.Long.toFixed(6)}<br>
-                고도: ${GpsInfo.Alt.toFixed(2)}m
-            </div>
-        `;
-        marker.bindPopup(popupContent);
+        
 
         // 이벤트 핸들러
         marker.on('click', (e) => {
