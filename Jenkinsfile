@@ -6,11 +6,15 @@ pipeline {
         DOCKER_REGISTRY = 'https://index.docker.io/v1/' // Or your private registry URL
         DOCKER_USERNAME = 'your-docker-username'      // Docker Hub username or repository owner
         IMAGE_NAME = "${DOCKER_USERNAME}/scv-path-editor"
-        // The ID of the Username/Password credential stored in Jenkins
+        
+        // The ID of the Username/Password credential for Docker stored in Jenkins
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials' 
-        // The ID of the SSH credential stored in Jenkins for deployment
-        SSH_CREDENTIALS_ID = 'your-server-ssh-key'
-        SERVER_USER_IP = 'your-user@your-server-ip'
+        
+        // The ID of the kubeconfig file credential stored in Jenkins
+        KUBECONFIG_CREDENTIALS_ID = 'kubernetes-kubeconfig'
+        
+        // The deployment name from your k8s-deployment.yaml file
+        K8S_DEPLOYMENT_NAME = 'scv-path-editor'
     }
 
     stages {
@@ -25,7 +29,6 @@ pipeline {
             steps {
                 echo "Building Docker image: ${IMAGE_NAME}:${env.BUILD_NUMBER}"
                 script {
-                    // Use the Dockerfile in the current directory to build the image
                     docker.build("${IMAGE_NAME}:${env.BUILD_NUMBER}", ".")
                 }
             }
@@ -34,7 +37,6 @@ pipeline {
         stage('Login to Docker Registry') {
             steps {
                 echo "Logging in to ${DOCKER_REGISTRY}..."
-                // Use the Jenkins Credentials plugin to securely handle credentials
                 withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                     sh "echo ${PASSWORD} | docker login -u ${USERNAME} --password-stdin ${DOCKER_REGISTRY}"
                 }
@@ -52,32 +54,26 @@ pipeline {
             }
         }
 
-        stage('Deploy to Server') {
-            // This is a simplified deployment example. 
-            // For a real production environment, consider using tools like Ansible, Kubernetes, or a dedicated deployment script.
-            // This stage requires the Jenkins agent to have passwordless SSH access to the deployment server.
+        stage('Deploy to Kubernetes') {
             steps {
-                echo "Deploying application to ${SERVER_USER_IP}..."
-                // Use the Jenkins SSH Agent plugin to securely connect to the remote server
-                sshagent(credentials: [SSH_CREDENTIALS_ID]) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no ${SERVER_USER_IP} << 'ENDSSH'
-                            # Stop and remove the old container to avoid conflicts
-                            echo 'Stopping and removing old container...'
-                            docker stop scv-path-editor || true
-                            docker rm scv-path-editor || true
-                            
-                            # Pull the latest image from the registry
-                            echo 'Pulling latest image...'
-                            docker pull ${IMAGE_NAME}:latest
-                            
-                            # Run the new container in detached mode
-                            echo 'Starting new container...'
-                            docker run -d --name scv-path-editor -p 80:8000 ${IMAGE_NAME}:latest
-                            
-                            echo 'Deployment complete.'
-                        ENDSSH
-                    """
+                echo "Deploying application to Kubernetes cluster..."
+                // Use the Jenkins Kubernetes CLI plugin to provide kubectl with credentials
+                withKubeConfig([credentialsId: KUBECONFIG_CREDENTIALS_ID]) {
+                    sh '''
+                        echo "Updating Kubernetes deployment with new image: ${IMAGE_NAME}:${env.BUILD_NUMBER}"
+                        
+                        # Use sed to replace the image tag in the YAML file. 
+                        # This makes the change idempotent and trackable.
+                        sed -i "s|image: .*|image: ${IMAGE_NAME}:${env.BUILD_NUMBER}|g" k8s-deployment.yaml
+                        
+                        echo "Applying updated k8s configuration..."
+                        kubectl apply -f k8s-deployment.yaml
+                        
+                        echo "Waiting for deployment rollout to complete..."
+                        kubectl rollout status deployment/${K8S_DEPLOYMENT_NAME} --timeout=120s
+                        
+                        echo "Deployment successful!"
+                    '''
                 }
             }
         }
@@ -85,7 +81,6 @@ pipeline {
 
     post {
         always {
-            // This block runs regardless of the pipeline's success or failure
             stage('Logout from Docker Registry') {
                 steps {
                     echo "Logging out from Docker registry..."
@@ -95,7 +90,6 @@ pipeline {
             
             stage('Clean up workspace') {
                 steps {
-                    // Deletes all files from the current workspace
                     cleanWs()
                 }
             }

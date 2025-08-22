@@ -1,3 +1,44 @@
+# ------------------- Persistent Volume (PV) ------------------- #
+# Note: This PV uses hostPath, which is suitable for single-node clusters (like Minikube) or testing.
+# For a production cloud environment (GKE, EKS, AKS), you should use a provider-specific
+# volume type like 'gcePersistentDisk', 'awsElasticBlockStore', or a StorageClass.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: scv-path-editor-pv
+  labels:
+    type: local
+spec:
+  storageClassName: standard
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    # This path must exist on the Kubernetes node that the pod runs on.
+    path: "/mnt/scv-data"
+  persistentVolumeReclaimPolicy: Retain
+
+---
+
+# ---------------- Persistent Volume Claim (PVC) ---------------- #
+# This PVC requests a volume from the available PVs.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scv-path-editor-pvc
+spec:
+  storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+
+# ---------------------- Deployment ---------------------- #
+# The application deployment, now with a volume mount for persistent data.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,12 +55,22 @@ spec:
       labels:
         app: scv-path-editor
     spec:
+      volumes:
+        # Define the volume from the PVC
+        - name: path-storage
+          persistentVolumeClaim:
+            claimName: scv-path-editor-pvc
       containers:
       - name: scv-path-editor
-        # Docker Hub 또는 사용하시는 컨테이너 레지스트리 주소에 맞게 수정해주세요.
+        # This image will be updated by the Jenkins pipeline
         image: your-docker-registry/scv-path-editor:latest
         ports:
         - containerPort: 8000
+        volumeMounts:
+          # Mount the volume into the container at the specified path
+          # This ensures that files saved in /app/backend/data persist
+          - name: path-storage
+            mountPath: /app/backend/data
         resources:
           requests:
             cpu: "200m"
@@ -30,16 +81,18 @@ spec:
 
 ---
 
+# ------------------------ Service ------------------------ #
+# The service is now of type NodePort, exposing the application on a static port on each node.
 apiVersion: v1
 kind: Service
 metadata:
   name: scv-path-editor-service
 spec:
-  # LoadBalancer, NodePort, ClusterIP, Ingress 등 환경에 맞게 선택
-  type: LoadBalancer 
+  type: NodePort
   selector:
     app: scv-path-editor
   ports:
     - protocol: TCP
       port: 80
       targetPort: 8000
+      # NodePort, if not specified, will be allocated from the range 30000-32767
