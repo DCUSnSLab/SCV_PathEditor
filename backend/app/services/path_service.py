@@ -9,12 +9,24 @@ from ..models.path_models import Node, Link, PathData, NodeCreate, LinkCreate, G
 
 class PathService:
     def __init__(self, data_dir: str = None):
-        if data_dir is None:
-            # 백엔드에서 상대 경로로 data 디렉토리 찾기
+        # 1. 환경 변수에서 데이터 디렉토리 경로를 우선적으로 확인합니다.
+        #    이는 컨테이너화된 환경에서 경로를 설정하는 가장 표준적인 방법입니다.
+        env_data_dir = os.environ.get('APP_DATA_DIR')
+
+        if data_dir:
+            # 2. 인자로 경로가 명시적으로 전달된 경우 (주로 테스트 코드용)
+            self.data_dir = data_dir
+        elif env_data_dir:
+            # 3. 환경 변수가 설정된 경우 (Docker/K8s 컨테이너 환경용)
+            self.data_dir = env_data_dir
+        else:
+            # 4. 위 두가지가 모두 없는 경우 (로컬 개발 환경용)
+            #    프로젝트 루트를 기준으로 상대 경로를 계산합니다.
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             self.data_dir = os.path.join(base_dir, "data", "path")
-        else:
-            self.data_dir = data_dir
+        
+        # 애플리케이션 시작 시 데이터 디렉토리가 항상 존재하도록 보장합니다.
+        os.makedirs(self.data_dir, exist_ok=True)
         self.current_nodes: List[Node] = []
         self.current_links: List[Link] = []
     

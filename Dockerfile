@@ -25,6 +25,10 @@ COPY frontend/ ./frontend/
 # Add the local python user's bin directory to the PATH
 ENV PATH=/root/.local/bin:$PATH
 
+# Set the data directory path for the container environment
+# The application will use this path to store persistent data.
+ENV APP_DATA_DIR=/app/backend/data/path
+
 # Expose the port the app runs on
 EXPOSE 8000
 

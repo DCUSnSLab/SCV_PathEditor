@@ -245,27 +245,32 @@ class UIManager {
     }
 
     async downloadFile() {
-        const selectedFile = this.fileSelect.value;
-        if (!selectedFile) {
+        const selectedFile = this.fileExplorer.getSelectedFile();
+        if (!selectedFile || selectedFile.type === 'folder') {
             showNotification('다운로드할 파일을 선택해주세요', 'warning');
             return;
         }
 
+        const filename = selectedFile.name;
+
         try {
             showLoading();
-            const blob = await pathAPI.downloadFile(selectedFile);
+            // API는 전체 경로가 아닌 파일명만 필요로 할 수 있습니다.
+            // 백엔드 API의 downloadFile 구현에 따라 selectedFile.fullPath 또는 filename을 사용합니다.
+            // 현재 백엔드 API는 filename만 받으므로 filename을 사용합니다.
+            const blob = await pathAPI.downloadFile(filename);
             
-            // 파일 다운로드
+            // 파일 다운로드 로직
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = selectedFile;
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
             
-            showNotification(`${selectedFile}이 다운로드되었습니다`, 'success');
+            showNotification(`${filename}이 다운로드되었습니다`, 'success');
             
         } catch (error) {
             handleAPIError(error, '파일 다운로드 중 오류가 발생했습니다');

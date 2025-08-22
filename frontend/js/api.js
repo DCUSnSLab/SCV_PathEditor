@@ -66,8 +66,22 @@ class PathAPI {
     }
 
     async downloadFile(filename) {
-        const response = await this.request(`/download/${filename}`);
-        return response.blob();
+        // 범용 request 헬퍼가 JSON을 자동 파싱하는 문제를 피하기 위해 fetch를 직접 사용합니다.
+        try {
+            const response = await fetch(`${this.baseUrl}/download/${filename}`);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+            
+            // ui.js가 처리할 수 있도록 blob 객체를 직접 반환합니다.
+            return await response.blob();
+
+        } catch (error) {
+            console.error('API request failed:', error);
+            throw error;
+        }
     }
 
     // 노드 관련 API
