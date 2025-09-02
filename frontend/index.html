@@ -33,39 +33,48 @@
         <div class="main-content">
             <!-- Left Panel - Controls -->
             <div class="left-panel">
-                <div class="control-section">
-                    <h3>편집 모드</h3>
-                    <div class="mode-buttons">
-                        <button id="selectModeBtn" class="btn btn-mode">Select Node</button>
-                        <button id="dragModeBtn" class="btn btn-mode">Drag Node</button>
-                        <button id="addNodeModeBtn" class="btn btn-mode">Add Node</button>
-                        <button id="quickLinkModeBtn" class="btn btn-mode">Quick Link</button>
-                        <button id="intervalCreateModeBtn" class="btn btn-mode">구간 노드 생성</button>
-                        <button id="deleteModeBtn" class="btn btn-mode">Delete Node</button>
-                    </div>
-                </div>
 
                 <div class="control-section">
-                    <h3>지도 옵션</h3>
-                    <div class="form-check">
-                        <input type="checkbox" id="toggleNodeIds" class="form-check-input" checked>
-                        <label for="toggleNodeIds" class="form-check-label">노드 ID 표시</label>
-                    </div>
+                    <p class="big-text">뷰 설정</p>
                     <div class="form-group">
-                        <label for="mapStyleSelect">지도 스타일:</label>
-                        <select id="mapStyleSelect" class="form-control">
+                        <p class="middle-text">지도 스타일</p>
+                        <select id="mapStyleSelect" class="form-control" style="margin-left:10px;">
                             <option value="street" selected>일반 지도</option>
                             <option value="satellite">위성 지도</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="nodeInterval">구간 간격 (m):</label>
-                        <input type="number" id="nodeInterval" class="form-control" value="10" min="1">
+                    <div class="form-check">
+                        <input type="checkbox" id="toggleNodeIds" class="form-check-input" checked>
+                        <p class="small-text">노드 ID 표시</p>
                     </div>
                 </div>
 
                 <div class="control-section">
-                    <h3>파일 탐색기</h3>
+                    <p class="big-text">도구</p>
+                    <div class="mode-buttons">
+                        <p class="middle-text">노드</p>
+                        <button id="selectModeBtn" class="btn btn-mode">선택 모드</button>
+                        <button id="addNodeModeBtn" class="btn btn-mode">생성 모드</button>
+                        <button id="dragModeBtn" class="btn btn-mode">이동 모드</button>
+                        <button id="deleteModeBtn" class="btn btn-mode">삭제 모드<br/>(미구현)</button>
+                    </div>
+                    <div class="mode-buttons">
+                        <p class="middle-text">구간 노드</p>
+                        <div class="form-group">
+                            <label for="nodeInterval">구간 간격 (m):</label>
+                            <input type="number" id="nodeInterval" class="form-control" value="10" min="1" style="margin-left:10px;width:30%;">
+                        </div>
+                        <button id="intervalCreateModeBtn" class="btn btn-mode">구간 노드 생성</button>
+                    </div>
+                    <div class="mode-buttons">
+                        <p class="middle-text">링크</p>
+                        <button id="linkTwoNodesModeBtn" class="btn btn-mode">두 노드 잇기 모드</button>
+                        <button id="linkManyNodesModeBtn" class="btn btn-mode">여러 노드 잇기 모드<br/>(미구현)</button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <p class="big-text">파일탐색기</p>
                     <div class="file-explorer">
                         <div class="file-explorer-header">
                             <button id="refreshFiles" class="btn-icon" title="파일 목록 새로보기">

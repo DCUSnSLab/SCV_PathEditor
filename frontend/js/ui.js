@@ -4,6 +4,7 @@ class UIManager {
         this.nodeTable = document.getElementById('nodeTable').getElementsByTagName('tbody')[0];
         this.linkTable = document.getElementById('linkTable').getElementsByTagName('tbody')[0];
         this.selectedNodeInfo = document.getElementById('selectedNodeInfo');
+        this.currentMode = null;
         
         // 파일 탐색기 초기화
         this.fileExplorer = new FileExplorer('fileTree');
@@ -29,7 +30,7 @@ class UIManager {
             this.setMode('addNode');
         });
 
-        document.getElementById('quickLinkModeBtn').addEventListener('click', () => {
+        document.getElementById('linkTwoNodesModeBtn').addEventListener('click', () => {
             this.setMode('quickLink');
         });
 
@@ -139,12 +140,26 @@ class UIManager {
             'select': 'selectModeBtn',
             'drag': 'dragModeBtn',
             'addNode': 'addNodeModeBtn',
-            'quickLink': 'quickLinkModeBtn',
+            'quickLink': 'linkTwoNodesModeBtn',
             'intervalCreate': 'intervalCreateModeBtn'
         };
 
+        // 같은 모드를 다시 클릭하면 해제
+        const isSameMode = this.currentMode === mode;
+
+        // 모든 모드 버튼 비활성화
+        document.querySelectorAll('.btn-mode').forEach(btn => btn.classList.remove('active'));
+
+        if (isSameMode) {
+            this.currentMode = null;
+            if (window.pathMap) window.pathMap.setMode(null);
+            showNotification('모드가 해제되었습니다', 'info');
+            return;
+        }
+
         if (modeButtons[mode]) {
             document.getElementById(modeButtons[mode]).classList.add('active');
+            this.currentMode = mode;
         }
 
         // 지도에 모드 설정
@@ -157,7 +172,7 @@ class UIManager {
             'select': '노드 선택 모드',
             'drag': '노드 드래그 모드 - 노드를 드래그하여 위치를 변경할 수 있습니다',
             'addNode': '노드 추가 모드 - 지도를 클릭하여 새 노드를 추가하세요',
-            'quickLink': 'QuickLink 모드 - 두 노드를 순서대로 클릭하여 링크를 생성하세요',
+            'quickLink': '두 노드 잇기 모드(Quick Link) - 두 노드를 순서대로 클릭하여 링크를 생성하세요',
             'intervalCreate': '구간 노드 생성 모드 - 시작점을 클릭하세요'
         };
 

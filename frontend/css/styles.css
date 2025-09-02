@@ -29,6 +29,30 @@ details > div {
     margin-top: 10px;
 }
 
+.big-text {
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    color: black;
+}
+
+.middle-text {
+    font-size: 1.0em;
+    font-weight: bold;
+    margin-top: 7px;
+    margin-bottom: 7px;
+    color: black;
+}
+
+.small-text {
+    font-size: 0.95em;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    color: #6c757d;
+}
+
+
 #app {
     height: 100vh;
     display: flex;
@@ -142,6 +166,7 @@ details > div {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    margin-bottom: 15px;
 }
 
 /* Buttons */
@@ -508,6 +533,7 @@ details > div {
 
 /* Form */
 .form-group {
+    display: flex;
     margin-bottom: 1rem;
 }
 
@@ -683,7 +709,7 @@ details > div {
 }
 
 .form-control {
-    width: 100%;
+    width: 50%;
     padding: 0.5rem;
     border: 1px solid #ddd;
     border-radius: 4px;
