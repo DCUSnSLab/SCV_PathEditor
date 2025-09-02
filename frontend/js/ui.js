@@ -37,6 +37,10 @@ class UIManager {
             this.setMode('intervalCreate');
         });
 
+        document.getElementById('deleteModeBtn').addEventListener('click', () => {
+            this.setMode('delete');
+        });
+
         // 파일 관련 버튼들
         document.getElementById('loadBtn').addEventListener('click', () => {
             this.loadFile();

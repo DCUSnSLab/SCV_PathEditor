@@ -115,6 +115,8 @@ class PathMap {
             this.handleQuickLinkClick(e);
         } else if (this.mode === 'intervalCreate') {
             this.handleIntervalCreateClick(e.latlng);
+        } else if (this.mode === 'delete') {
+
         }
         
         if (this.onMapClick) {

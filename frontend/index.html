@@ -25,6 +25,10 @@
             </div>
         </header>
 
+        <button id="menu-btn" class="floating-toggle" aria-controls="right-pn" aria-expanded="true">
+            테이블 및 정보
+        </button>
+
         <!-- Main Content -->
         <div class="main-content">
             <!-- Left Panel - Controls -->
@@ -37,6 +41,7 @@
                         <button id="addNodeModeBtn" class="btn btn-mode">Add Node</button>
                         <button id="quickLinkModeBtn" class="btn btn-mode">Quick Link</button>
                         <button id="intervalCreateModeBtn" class="btn btn-mode">구간 노드 생성</button>
+                        <button id="deleteModeBtn" class="btn btn-mode">Delete Node</button>
                     </div>
                 </div>
 
@@ -60,21 +65,14 @@
                 </div>
 
                 <div class="control-section">
-                    <h3>선택된 노드</h3>
-                    <div id="selectedNodeInfo">
-                        <p>노드를 선택해주세요</p>
-                    </div>
-                </div>
-
-                <div class="control-section">
                     <h3>파일 탐색기</h3>
                     <div class="file-explorer">
                         <div class="file-explorer-header">
                             <button id="refreshFiles" class="btn-icon" title="파일 목록 새로보기">
-                                <span>🔄</span>
+                                <span>새로고침</span>
                             </button>
                             <button id="newFolder" class="btn-icon" title="새 폴더">
-                                <span>📁+</span>
+                                <span>새 폴더</span>
                             </button>
                         </div>
                         <div class="file-tree" id="fileTree">
@@ -93,9 +91,12 @@
             </div>
 
             <!-- Right Panel - Data Tables -->
-            <div class="right-panel">
+            <div class="right-panel" id="right-pn">
                 <div class="table-section">
-                    <h3>노드 테이블</h3>
+
+                <!--노드 테이블-->
+                <details open>
+                    <summary>노드 테이블</summary>
                     <div class="table-container">
                         <table id="nodeTable" class="data-table">
                             <thead>
@@ -113,25 +114,40 @@
                             <tbody></tbody>
                         </table>
                     </div>
-                </div>
+                </details>
 
-                <div class="table-section">
-                    <h3>링크 테이블</h3>
-                    <div class="table-container">
-                        <table id="linkTable" class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>From</th>
-                                    <th>To</th>
-                                    <th>Length (km)</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
+                <!--링크 테이블-->
+                <details open>
+                    <summary>링크 테이블</summary>
+                    <div class="table-section">
+                        <div class="table-container">
+                            <table id="linkTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>From</th>
+                                        <th>To</th>
+                                        <th>Length (km)</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
+                </details>
+                
+                <!--선택된 노드 정보-->
+                <details open>
+                    <summary>선택된 노드 정보</summary>
+                    <div class="control-section">
+                        <div id="selectedNodeInfo">
+                            <p>노드를 선택해주세요</p>
+                        </div>
+                        <button id="editBtn" class="btn btn-mode">수정</button>
+                    </div>
+                </details>
+
             </div>
         </div>
     </div>
@@ -164,6 +180,10 @@
                     <div class="form-group">
                         <label>Remark:</label>
                         <input type="text" id="nodeRemark" value="">
+                    </div>
+                    <div class="form-group">
+                        <label>NodeType:</label>
+                        <input type="text" id="nodeType" value="">
                     </div>
                 </form>
             </div>
@@ -210,3 +230,18 @@
     <script src="js/app.js"></script>
 </body>
 </html>
+
+<script>
+    const panel = document.getElementById('right-pn');
+    const btn = document.getElementById('menu-btn');
+
+    btn.addEventListener('click', () => {
+    const hidden = panel.classList.toggle('is-hidden');
+    btn.setAttribute('aria-expanded', String(!hidden));
+
+    // Leaflet 맵이 있다면 크기 재계산
+    if (!hidden && window.pathMap?.leafletMap) {
+        setTimeout(() => window.pathMap.leafletMap.invalidateSize(), 0);
+    }
+    });
+</script>

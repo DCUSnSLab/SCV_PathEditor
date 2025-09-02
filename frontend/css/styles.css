@@ -12,6 +12,23 @@ body {
     overflow: hidden;
 }
 
+details {
+    margin: 5px 0 20px;
+    background-color: #f5f5f5;
+    padding: 10px;
+    padding-left: 15px;
+    border-radius:15px;
+}
+details > summary {
+    font-size: 1.2em;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+details > div {
+    margin-top: 10px;
+}
+
 #app {
     height: 100vh;
     display: flex;
@@ -61,11 +78,40 @@ body {
 }
 
 .right-panel {
-    width: 400px;
+    width: 25%;
     background-color: white;
     border-left: 1px solid #ddd;
     padding: 1rem;
     overflow-y: auto;
+}
+
+/* Folding */
+#right-pn {
+    flex: 0 0 25%;
+    overflow: auto;
+}
+
+#right-pn.is-hidden {
+    display: none;
+}
+
+.floating-toggle {
+  position: fixed;        /* 화면 기준 고정 */
+  top: 10%;              /* 상단 여백 */
+  right: 10%;            /* 우측 여백 */
+  z-index: 1000;          /* 다른 요소 위에 표시 */
+  padding: 8px 12px;
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.2s ease;
+}
+
+.floating-toggle:hover {
+  background-color: #0056b3;
 }
 
 /* Map */
@@ -76,7 +122,7 @@ body {
 
 /* Control Sections */
 .control-section {
-    margin-bottom: 2rem;
+    margin-bottom: 0;
     padding-bottom: 1rem;
     border-bottom: 1px solid #eee;
 }
@@ -166,6 +212,13 @@ body {
     background-color: #c0392b;
 }
 
+#editBtn {
+    margin-top: 10px;
+    width: 100%;
+    background-color: #adb5bd;
+    color: #ffffff;
+}
+
 /* File Explorer */
 .file-explorer {
     border: 1px solid #ddd;
@@ -179,6 +232,7 @@ body {
 
 .file-explorer-header {
     display: flex;
+    flex-direction: row-reverse;
     gap: 0.5rem;
     padding: 0.5rem;
     background-color: #f8f9fa;
@@ -335,7 +389,7 @@ body {
 
 /* Selected Node Info */
 #selectedNodeInfo {
-    background-color: #f8f9fa;
+    background-color: #ffffff;
     padding: 1rem;
     border-radius: 4px;
     border: 1px solid #e9ecef;
@@ -366,6 +420,7 @@ body {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.8rem;
+    background-color: #ffffff;
 }
 
 .data-table th {
