@@ -47,6 +47,10 @@ class UIManager {
             this.loadFile();
         });
 
+        document.getElementById('importBtn').addEventListener('click', () => {
+            this.importFile();
+        })
+
         document.getElementById('saveBtn').addEventListener('click', () => {
             this.showSaveModal();
         });
@@ -212,6 +216,34 @@ class UIManager {
             hideLoading();
         }
     }
+
+    importFile() {
+        const selectedFile = this.fileExplorer.getSelectedFile();
+        if (!selectedFile || selectedFile.type === 'folder') {
+            showNotification('JSON 파일을 선택해주세요', 'warning');
+            return;
+        }
+        this.importPathData(selectedFile.fullPath);
+    }
+
+    async importPathData(filename) {
+  try {
+    showLoading();
+    const pathData = await pathAPI.loadPathData(filename);
+
+    // 핵심: 단순 push 대신 매핑 병합
+    this.mergePathData(pathData);
+
+    this.updateTables();
+    this.updateMap();
+
+    showNotification(`${filename} 파일의 Path를 가져왔습니다`, 'success');
+  } catch (error) {
+    handleAPIError(error, '파일 가져오기 중 오류가 발생했습니다');
+  } finally {
+    hideLoading();
+  }
+}
 
     showSaveModal() {
         const saveFilename = document.getElementById('saveFilename');
@@ -560,5 +592,73 @@ class UIManager {
         if (modal) {
             modal.style.display = 'none';
         }
+    }
+
+    // "N0001" -> 1
+    parseNodeIdx(nid) {
+        const m = String(nid).match(/N(\d+)/i);
+        return m ? parseInt(m[1], 10) : 0;
+    }
+
+    // 4 -> "N0004"
+    formatNodeId(n) {
+        return `N${String(n).padStart(4, '0')}`;
+    }
+
+    // "L0007" -> 7 (링크 ID가 중복될 때 새 번호 부여용)
+    parseLinkIdx(lid) {
+        const m = String(lid).match(/L(\d+)/i);
+        return m ? parseInt(m[1], 10) : 0;
+    }
+
+    /**
+ * 현재 this.currentData 뒤에 pathData를 합치면서
+ * - 새로 들어온 노드 ID를 연속 번호로 재부여
+ * - 링크의 FromNodeID/ToNodeID를 새 노드 ID로 치환
+ * - 링크 ID가 중복되면 L000X 형태로 새로 부여
+ */
+    mergePathData(pathData) {
+    // 1) file1(=currentData)의 최대 노드 번호
+    const maxIdx = this.currentData.Node.reduce(
+        (m, n) => Math.max(m, this.parseNodeIdx(n.ID)),
+        0
+    );
+
+    // 2) 들어온 노드의 oldID -> newID 매핑
+    const idMap = {};
+    pathData.Node.forEach((n, i) => {
+        idMap[n.ID] = this.formatNodeId(maxIdx + 1 + i);
+    });
+
+    // 3) 노드 복제(새 ID 적용)
+    const mappedNodes = pathData.Node.map(n => ({ ...n, ID: idMap[n.ID] }));
+
+    // 4) 링크 ID 중복 방지 세팅
+    const existingLinkIds = new Set(this.currentData.Link.map(l => l.ID));
+    let linkMax = Math.max(
+        0,
+        ...Array.from(existingLinkIds).map(id => this.parseLinkIdx(id))
+    );
+
+    // 5) 링크 복제(끝점/ID 치환)
+    const mappedLinks = pathData.Link.map(l => {
+        let newLinkId = l.ID;
+        if (!newLinkId || existingLinkIds.has(newLinkId)) {
+        linkMax += 1;
+        newLinkId = `L${String(linkMax).padStart(4, '0')}`;
+        }
+        existingLinkIds.add(newLinkId);
+
+        return {
+        ...l,
+        ID: newLinkId,
+        FromNodeID: idMap[l.FromNodeID] ?? l.FromNodeID,
+        ToNodeID: idMap[l.ToNodeID] ?? l.ToNodeID,
+        };
+    });
+
+    // 6) 현재 데이터에 합치기
+    this.currentData.Node.push(...mappedNodes);
+    this.currentData.Link.push(...mappedLinks);
     }
 }
