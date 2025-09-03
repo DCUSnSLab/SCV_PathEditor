@@ -1,0 +1,27 @@
+{
+    "Node": [
+        {
+            "ID": "N0040",
+            "AdminCode": "",
+            "NodeType": 1,
+            "ITSNodeID": "",
+            "Maker": "SCV Web Editor",
+            "UpdateDate": "20250903",
+            "Version": "2021",
+            "Remark": "",
+            "HistType": "02A",
+            "HistRemark": "Web Editor로 생성",
+            "GpsInfo": {
+                "Lat": 37.569004,
+                "Long": 126.968865,
+                "Alt": 0.0
+            },
+            "UtmInfo": {
+                "Easting": 319840.94694598485,
+                "Northing": 4160445.079100761,
+                "Zone": "52N"
+            }
+        }
+    ],
+    "Link": []
+}

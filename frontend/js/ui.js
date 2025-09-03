@@ -13,6 +13,10 @@ class UIManager {
         });
         
         this.currentData = { Node: [], Link: [] };
+
+        // ★ 현재 모달이 '수정'으로 열렸는지 구분하기 위한 플래그/ID
+        this.editingNodeId = null;
+
         this.setupEventListeners();
     }
 
@@ -65,6 +69,10 @@ class UIManager {
 
         document.getElementById('fileInput').addEventListener('change', (e) => {
             this.uploadFile(e.target.files[0]);
+        });
+
+        document.getElementById('editBtn').addEventListener('click', () => {
+            this.openEditNodeModal();
         });
 
         // 지도 옵션
@@ -205,6 +213,7 @@ class UIManager {
             const pathData = await pathAPI.loadPathData(filename);
             
             this.currentData = pathData;
+            this.currentData.Node = this.normalizeAllNodes(this.currentData.Node);
             this.updateTables();
             this.updateMap();
             
@@ -426,6 +435,7 @@ class UIManager {
         this.selectedNodeInfo.innerHTML = `
             <p><strong>ID:</strong> ${nodeData.ID}</p>
             <p><strong>NodeType:</strong> ${nodeData.NodeType}</p>
+            <p><strong>Heading:</strong> ${this.formatHeading(nodeData)}</p>
             <p><strong>위도:</strong> ${nodeData.GpsInfo.Lat.toFixed(6)}</p>
             <p><strong>경도:</strong> ${nodeData.GpsInfo.Long.toFixed(6)}</p>
             <p><strong>고도:</strong> ${nodeData.GpsInfo.Alt.toFixed(2)}m</p>
@@ -445,6 +455,7 @@ class UIManager {
         document.getElementById('nodeMaker').value = 'SCV Web Editor';
         document.getElementById('nodeRemark').value = '';
         document.getElementById('nodeType').value = '1';
+        document.getElementById('nodeHeading').value = '0.0';
         
         this.showModal('nodeModal');
     }
@@ -463,6 +474,75 @@ class UIManager {
                 nodeType = 1; // 기본값
         }
 
+        // ★ Heading (float)
+        let heading = parseFloat(document.getElementById('nodeHeading').value);
+        if (Number.isNaN(heading)) heading = 0.0;
+        // 필요하면 0~360 범위로 정규화:
+        // heading = ((heading % 360) + 360) % 360;
+
+
+         // --------- ★ 수정 분기: editingNodeId가 있으면 '덮어쓰기' ----------
+        if (this.editingNodeId) {
+            const nodeId = this.editingNodeId;
+
+            // 로컬 덮어쓸 데이터 (위/경도는 readOnly이므로 그대로)
+            const updatedLocal = {
+            NodeType: nodeType,
+            Maker: maker,
+            Remark: remark,
+            Heading: heading,
+            GpsInfo: { Lat: lat, Long: lng, Alt: alt }
+            // UtmInfo/기타 필드는 기존 값 유지
+            };
+
+            try {
+            showLoading();
+
+            // 서버에도 적용 가능한 API가 있으면 호출 (없으면 로컬만)
+            let updatedFromServer = null;
+            if (typeof pathAPI.updateNode === 'function') {
+                // 서버 스키마에 맞춰 필요 시 ID 포함
+                updatedFromServer = await pathAPI.updateNode(nodeId, updatedLocal);
+            } else if (typeof pathAPI.updateNodeAttributes === 'function') {
+                updatedFromServer = await pathAPI.updateNodeAttributes(nodeId, updatedLocal);
+            }
+
+            // 로컬 데이터 갱신
+            const idx = this.currentData.Node.findIndex(n => n.ID === nodeId);
+            if (idx !== -1) {
+                const prev = this.currentData.Node[idx];
+                const merged = this.normalizeNode({
+                ...prev,
+                ...updatedLocal,
+                // UTM은 위치 바꾸지 않았으니 유지
+                UtmInfo: prev.UtmInfo,
+                ID: nodeId
+                });
+                this.currentData.Node[idx] = merged;
+
+                // 지도/선택 패널에 반영
+                if (window.pathMap && window.pathMap.nodes.has(nodeId)) {
+                window.pathMap.nodes.get(nodeId).data = merged;
+                }
+                this.updateNodeTable();
+                this.updateSelectedNodeInfo(nodeId, merged);
+            }
+
+            // UI 마무리
+            this.hideModal('nodeModal');
+            this.editingNodeId = null; // 편집 종료
+            showNotification(`노드 ${nodeId}가 수정되었습니다`, 'success');
+            } catch (error) {
+            handleAPIError(error, '노드 수정 중 오류가 발생했습니다');
+            } finally {
+            hideLoading();
+            }
+            return; // ★ 생성 분기는 타지 않게 종료
+        }
+        // -------------------- 여기까지가 수정 분기 --------------------
+
+
+
         // UTM 좌표 계산 (간단한 근사치)
         const utmX = 302485.85 + (lng - 126.7732925755467) * 88740;
         const utmY = 4123756.89 + (lat - 37.239429897406026) * 111320;
@@ -477,7 +557,7 @@ class UIManager {
             Remark: remark,
             HistType: "02A",
             HistRemark: "Web Editor로 생성",
-            Heading: 0.0,
+            Heading: heading,
             GpsInfo: {
                 Lat: lat,
                 Long: lng,
@@ -493,9 +573,10 @@ class UIManager {
         try {
             showLoading();
             const newNode = await pathAPI.createNode(nodeData);
+            if (newNode.Heading === undefined) newNode.Heading = nodeData.Heading; // 보정
             
             // 현재 데이터에 추가
-            this.currentData.Node.push(newNode);
+            this.currentData.Node.push(this.normalizeNode(newNode));
             
             // UI 업데이트
             this.updateNodeTable();
@@ -670,5 +751,55 @@ class UIManager {
     // 6) 현재 데이터에 합치기
     this.currentData.Node.push(...mappedNodes);
     this.currentData.Link.push(...mappedLinks);
+    this.currentData.Node = this.normalizeAllNodes(this.currentData.Node);
     }
+
+    normalizeNode(node) {
+        // backend가 heading 소문자로 줄 수도 있으니 흡수
+        if (node.Heading === undefined) {
+            if (typeof node.heading === 'number') node.Heading = node.heading;
+            else node.Heading = 0.0; // 기본값
+        }
+        return node;
+    }
+
+    normalizeAllNodes(nodes) {
+        return nodes.map(n => this.normalizeNode(n));
+    }
+
+    formatHeading(node) {
+        const h = (node.Heading ?? node.heading ?? 0);
+        return (typeof h === 'number') ? h.toFixed(1) : String(h);
+    }
+
+    openEditNodeModal() {
+        if (!window.pathMap) return showNotification('지도가 초기화되지 않았습니다', 'warning');
+
+        const sel = window.pathMap.getSelectedNode();
+        if (!sel || !sel.data) {
+            showNotification('먼저 노드를 선택하세요.', 'warning');
+            return;
+        }
+        const n = sel.data;
+
+        // ★ 편집 대상 ID 저장
+        this.editingNodeId = n.ID;
+
+        // 모달 제목/버튼 문구
+        const modal = document.getElementById('nodeModal');
+        modal.querySelector('.modal-header h3').textContent = `노드 수정 (${n.ID})`;
+        modal.querySelector('#saveNodeBtn').textContent = '수정 저장';
+
+        // 기존 값 채우기 (위/경도는 readonly 유지)
+        document.getElementById('nodeLat').value     = (n.GpsInfo?.Lat ?? 0).toFixed(6);
+        document.getElementById('nodeLon').value     = (n.GpsInfo?.Long ?? 0).toFixed(6);
+        document.getElementById('nodeAlt').value     = (n.GpsInfo?.Alt ?? 0).toString();
+        document.getElementById('nodeMaker').value   = n.Maker ?? '';
+        document.getElementById('nodeRemark').value  = n.Remark ?? '';
+        document.getElementById('nodeType').value    = (n.NodeType ?? 1).toString();
+        document.getElementById('nodeHeading').value = (n.Heading ?? n.heading ?? 0).toString();
+
+        this.showModal('nodeModal');
+    }
+
 }

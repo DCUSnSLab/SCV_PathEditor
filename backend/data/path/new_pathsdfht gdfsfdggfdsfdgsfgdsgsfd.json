@@ -9579,10 +9579,10 @@
             "Remark": "Node 256",
             "HistType": "02A",
             "HistRemark": "진출입 도로 변경",
-            "Heading": 0.0,
+            "Heading": 3.0,
             "GpsInfo": {
-                "Lat": 35.9137546,
-                "Long": 128.8033065,
+                "Lat": 35.913755,
+                "Long": 128.803306,
                 "Alt": 123.991
             },
             "UtmInfo": {
@@ -18947,6 +18947,28 @@
             "Remark": "특이사항 없음",
             "HistType": "02A",
             "HistRemark": "진출입 도로 변경"
+        },
+        {
+            "ID": "L01590413",
+            "AdminCode": "110",
+            "RoadRank": 1,
+            "RoadType": 1,
+            "RoadNo": "20",
+            "LinkType": 3,
+            "LaneNo": 2,
+            "R_LinkID": "R_N0159",
+            "L_LinkID": "L_N0413",
+            "FromNodeID": "N0159",
+            "ToNodeID": "N0413",
+            "SectionID": "QUICKLINK_SECTION",
+            "Length": 0.02427,
+            "ITSLinkID": "ITS_1756906110751",
+            "Maker": "QuickLink 자동생성",
+            "UpdateDate": "20250903",
+            "Version": "2021",
+            "Remark": "QuickLink로 자동 생성된 링크",
+            "HistType": "02A",
+            "HistRemark": "QuickLink 기능으로 생성"
         }
     ]
 }
