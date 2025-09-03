@@ -425,6 +425,7 @@ class UIManager {
 
         this.selectedNodeInfo.innerHTML = `
             <p><strong>ID:</strong> ${nodeData.ID}</p>
+            <p><strong>NodeType:</strong> ${nodeData.NodeType}</p>
             <p><strong>위도:</strong> ${nodeData.GpsInfo.Lat.toFixed(6)}</p>
             <p><strong>경도:</strong> ${nodeData.GpsInfo.Long.toFixed(6)}</p>
             <p><strong>고도:</strong> ${nodeData.GpsInfo.Alt.toFixed(2)}m</p>
@@ -443,6 +444,7 @@ class UIManager {
         document.getElementById('nodeAlt').value = '0';
         document.getElementById('nodeMaker').value = 'SCV Web Editor';
         document.getElementById('nodeRemark').value = '';
+        document.getElementById('nodeType').value = '1';
         
         this.showModal('nodeModal');
     }
@@ -454,13 +456,20 @@ class UIManager {
         const maker = document.getElementById('nodeMaker').value || 'SCV Web Editor';
         const remark = document.getElementById('nodeRemark').value || '';
 
+        // NodeType 읽기 및 검증
+        const nodeTypeInput = document.getElementById('nodeType').value;
+        let nodeType = parseInt(nodeTypeInput, 10);
+            if (Number.isNaN(nodeType)) {
+                nodeType = 1; // 기본값
+        }
+
         // UTM 좌표 계산 (간단한 근사치)
         const utmX = 302485.85 + (lng - 126.7732925755467) * 88740;
         const utmY = 4123756.89 + (lat - 37.239429897406026) * 111320;
 
         const nodeData = {
             AdminCode: "",
-            NodeType: 1,
+            NodeType: nodeType,
             ITSNodeID: "",
             Maker: maker,
             UpdateDate: new Date().toISOString().slice(0, 10).replace(/-/g, ''),
@@ -468,6 +477,7 @@ class UIManager {
             Remark: remark,
             HistType: "02A",
             HistRemark: "Web Editor로 생성",
+            Heading: 0.0,
             GpsInfo: {
                 Lat: lat,
                 Long: lng,
