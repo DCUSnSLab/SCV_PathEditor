@@ -25,7 +25,7 @@ class Node(BaseModel):
     Remark: str = ""
     HistType: str = "02A"
     HistRemark: str = ""
-    Heading: float = 0.0
+    Heading: float = -1.0
     GpsInfo: GpsInfo
     UtmInfo: UtmInfo
 
@@ -68,7 +68,7 @@ class NodeCreate(BaseModel):
     Remark: str = ""
     HistType: str = "02A"
     HistRemark: str = ""
-    Heading: float = 0.0
+    Heading: float = -1.0
     GpsInfo: GpsInfo
     UtmInfo: UtmInfo
 
