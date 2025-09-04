@@ -6,7 +6,8 @@ class PathMap {
         this.nodes = new Map(); // nodeId -> {marker, data}
         this.links = new Map(); // linkId -> {polyline, data}
         this.selectedNode = null;
-        this.mode = 'select'; // select, drag, addNode, quickLink
+        this.selectedNodes = new Set();
+        this.mode = null // select, drag, addNode, quickLink
         this.quickLinkFirstNode = null;
 
         // 구간 노드 생성 관련 변수
@@ -241,11 +242,14 @@ class PathMap {
         if (mode !== 'intervalCreate') {
             this.resetIntervalCreate();
         }
-        
-        // QuickLink 모드가 아닐 때 선택 상태 초기화
-        if (mode !== 'quickLink') {
-            this.resetQuickLinkSelection();
-        }
+
+        // // QuickLink 모드가 아닐 때 선택 상태 초기화
+        // if (mode !== 'quickLink') {
+        //     this.resetQuickLinkSelection();
+        // }
+
+        // ★ 복수 선택도 모드 변경 시 초기화
+        this.clearSelections();
         
         // 드래그 모드 설정
         this.nodes.forEach(nodeInfo => {
@@ -299,14 +303,19 @@ class PathMap {
             marker.openTooltip();
         }
 
-        
-
-        // 이벤트 핸들러
         marker.on('click', (e) => {
             L.DomEvent.stopPropagation(e);
+            // 복수 선택 모드: 토글(누적/해제)
             if (this.mode === 'select') {
-                this.selectNode(ID);
+                this.toggleSelectNode(ID);
+                return;
             }
+            // 특수 모드들(지도 클릭 제스처 사용하는 모드)에서는 건드리지 않음
+            if (this.mode === 'addNode' || this.mode === 'quickLink' || this.mode === 'intervalCreate' || this.mode === 'delete') {
+                return;
+            }
+            // 그 외(아무 모드도 아님/일반 상태/드래그 모드 등): 항상 단일 선택
+            this.selectOnly(ID);
         });
 
         // 드래그 이벤트 핸들러 - DOM 요소에 직접 이벤트 추가
@@ -328,6 +337,8 @@ class PathMap {
 
         // 저장
         this.nodes.set(ID, { marker, data: nodeData });
+        this.updateHeadingForNode(ID);
+
 
         return marker;
     }
@@ -336,6 +347,7 @@ class PathMap {
         const nodeInfo = this.nodes.get(nodeId);
         if (nodeInfo) {
             this.map.removeLayer(nodeInfo.marker);
+            if (nodeInfo.headingMarker) this.map.removeLayer(nodeInfo.headingMarker);
             this.nodes.delete(nodeId);
             
             // 선택된 노드였다면 선택 해제
@@ -457,6 +469,66 @@ class PathMap {
         }
     }
 
+    /** --- Heading arrows (▲) --- */
+// 주어진 heading(deg, 북=0°, 시계방향)으로 회전한 주황색 화살표 아이콘 생성
+// ⬇ 기존 _makeHeadingIcon(...) 을 이걸로 교체
+    _makeHeadingIcon(deg) {
+        // 링크 폴리라인 굵기(3)의 1.2배 느낌
+        const shaftWidth = 4;           // 3 * 1.2 ≈ 4
+        const box = 36;                 // 아이콘 전체 박스(px) - 화살 길이감
+        const svg = `
+    <svg width="${box}" height="${box}" viewBox="0 0 100 100">
+      <defs>
+        <marker id="hhead" markerWidth="18" markerHeight="18" refX="9" refY="6" orient="auto">
+          <path d="M0,0 L18,6 L0,12 z" fill="#f39c12" />
+        </marker>
+      </defs>
+      <!-- 아래(노드)에서 위(북)로 뻗는 몸통 -->
+      <line x1="50" y1="92" x2="50" y2="18"
+            stroke="#f39c12" stroke-width="${shaftWidth}"
+            stroke-linecap="round" marker-end="url(#hhead)" />
+    </svg>
+  `;
+        return L.divIcon({
+            className: 'heading-arrow-icon',
+            html: `<div class="heading-arrow-long" style="transform: rotate(${deg}deg);">${svg}</div>`,
+            iconSize: [box, box],
+            // 아이콘의 거의 바닥이 노드 중심에 오도록 앵커 설정
+            iconAnchor: [box / 2, box - 2],
+        });
+    }
+
+
+// 노드의 Heading 값에 맞춰 화살표를 생성/갱신(-1이면 제거)
+    updateHeadingForNode(nodeId) {
+        const entry = this.nodes.get(nodeId);
+        if (!entry) return;
+
+        // 기존 화살표 제거
+        if (entry.headingMarker) {
+            this.map.removeLayer(entry.headingMarker);
+            entry.headingMarker = null;
+        }
+
+        const h = entry.data?.Heading;
+        if (typeof h === 'number' && h >= 0) {
+            entry.headingMarker = L.marker(entry.marker.getLatLng(), {
+                icon: this._makeHeadingIcon(h),
+                interactive: false,
+                keyboard: false,
+            }).addTo(this.map);
+        }
+    }
+
+// 노드 이동 시 화살표도 같은 위치로 이동
+    updateHeadingPosition(nodeId) {
+        const entry = this.nodes.get(nodeId);
+        if (entry?.headingMarker) {
+            entry.headingMarker.setLatLng(entry.marker.getLatLng());
+        }
+    }
+
+
     async handleNodeDrag(nodeId, newLat, newLng) {
         console.log(`Handling drag for node ${nodeId}: ${newLat}, ${newLng}`);
         
@@ -489,6 +561,7 @@ class PathMap {
                 nodeInfo.data.GpsInfo.Lat = originalLat;
                 nodeInfo.data.GpsInfo.Long = originalLng;
                 nodeInfo.marker.setLatLng([originalLat, originalLng]);
+                this.updateHeadingPosition(nodeId);
                 
                 // 링크들도 다시 복원
                 this.updateNodeLinks(nodeId);
@@ -558,6 +631,10 @@ class PathMap {
         if (this.isDragging && this.draggedMarker && this.mode === 'drag') {
             // 마커 위치는 즉시 업데이트
             this.draggedMarker.setLatLng(e.latlng);
+            // ⬇ handleGlobalMouseMove 안에 마커 setLatLng 다음 줄에 추가
+            this.updateHeadingPosition(this.draggedNodeId);
+
+            if (this.draggedNodeId) this.updateHeadingPosition(this.draggedNodeId);
             
             // 링크 업데이트는 쓰로틀링 적용 (성능 개선)
             if (this.dragUpdateTimeout) {
@@ -609,6 +686,7 @@ class PathMap {
         // 모든 노드 제거
         this.nodes.forEach((nodeInfo) => {
             this.map.removeLayer(nodeInfo.marker);
+            if (nodeInfo.headingMarker) this.map.removeLayer(nodeInfo.headingMarker);
         });
         this.nodes.clear();
 
@@ -638,6 +716,46 @@ class PathMap {
 
     getSelectedNode() {
         return this.selectedNode ? this.nodes.get(this.selectedNode) : null;
+    }
+
+    getSelectedNodeIds() {
+        return Array.from(this.selectedNodes);
+    }
+    getSelectedNodes() {
+        return this.getSelectedNodeIds().map(id => this.nodes.get(id)?.data).filter(Boolean);
+    }
+    clearSelections() {
+        // 단일 선택 하이라이트도 복원
+        if (this.selectedNode) {
+            this.highlightNode(this.selectedNode, '#e74c3c');
+        }
+        // 복수 선택 하이라이트 복원
+        this.selectedNodes.forEach(id => this.highlightNode(id, '#e74c3c'));
+        this.selectedNode = null;
+        this.selectedNodes.clear();
+    }
+    toggleSelectNode(nodeId) {
+        if (this.selectedNodes.has(nodeId)) {
+            // 해제
+            this.selectedNodes.delete(nodeId);
+            this.highlightNode(nodeId, '#e74c3c');
+        } else {
+            this.selectedNodes.add(nodeId);
+            this.highlightNode(nodeId, '#f1c40f'); // 선택색
+        }
+
+        // UI에 선택 변경 알리기(정보 패널 갱신)
+        if (this.onNodeSelect) {
+            if (this.selectedNodes.size >= 2) {
+                this.onNodeSelect(null, null); // UI가 "여러 개 선택됨"을 렌더하도록
+            } else if (this.selectedNodes.size === 1) {
+                const id = this.getSelectedNodeIds()[0];
+                const nd = this.nodes.get(id)?.data || null;
+                this.onNodeSelect(id, nd);
+            } else {
+                this.onNodeSelect(null, null);
+            }
+        }
     }
 
     // --- 구간 노드 생성 관련 함수들 ---
@@ -764,4 +882,18 @@ class PathMap {
             hideLoading();
         }
     }
+
+    selectOnly(nodeId) {
+        // 기존 선택 전부 해제하고 하나만
+        this.clearSelections();
+        this.selectedNode = nodeId;
+        this.selectedNodes.add(nodeId);        // 내부적으로는 Set으로 1개만 유지
+        this.highlightNode(nodeId, '#f1c40f');
+        if (this.onNodeSelect) {
+            const nd = this.nodes.get(nodeId)?.data || null;
+            this.onNodeSelect(nodeId, nd);
+        }
+    }
+
+
 }

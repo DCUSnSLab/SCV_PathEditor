@@ -54,7 +54,7 @@
                     <p class="big-text">도구</p>
                     <div class="mode-buttons">
                         <p class="middle-text">노드</p>
-                        <button id="selectModeBtn" class="btn btn-mode">선택 모드</button>
+                        <button id="selectModeBtn" class="btn btn-mode">복수 선택 모드</button>
                         <button id="addNodeModeBtn" class="btn btn-mode">생성 모드</button>
                         <button id="dragModeBtn" class="btn btn-mode">이동 모드</button>
                         <button id="deleteModeBtn" class="btn btn-mode">삭제 모드<br/>(미구현)</button>
@@ -155,6 +155,7 @@
                             <p>노드를 선택해주세요</p>
                         </div>
                         <button id="editBtn" class="btn btn-mode">단일 노드 속성 수정</button>
+                        <button id="batchEditBtn" class="btn btn-mode">선택된 노드 속성 일괄 수정</button>
                     </div>
                 </details>
 
@@ -197,7 +198,7 @@
                     </div>
                     <div class="form-group">
                         <label>Heading:</label>
-                        <input type="number" id="nodeHeading" value="0.0" step="any" step="0.1"/>
+                        <input type="number" id="nodeHeading" value="-1.0" step="any" step="0.1"/>
                     </div>
                 </form>
             </div>
@@ -208,7 +209,42 @@
         </div>
     </div>
 
-    <div id="saveModal" class="modal">
+    <div id="batchEditModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>선택된 노드 속성 일괄 수정</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="batchForm">
+                    <div class="form-group">
+                        <label>고도(Alt):</label>
+                        <input type="number" id="batchAlt" step="any" placeholder="값 입력 시 일괄 덮어쓰기">
+                    </div>
+                    <div class="form-group">
+                        <label>Maker:</label>
+                        <input type="text" id="batchMaker" placeholder="값 입력 시 일괄 덮어쓰기">
+                    </div>
+                    <div class="form-group">
+                        <label>NodeType:</label>
+                        <input type="number" id="batchNodeType" min="1" step="1" placeholder="값 입력 시 일괄 덮어쓰기">
+                    </div>
+                    <div class="form-group">
+                        <label>Heading:</label>
+                        <input type="number" id="batchHeading" step="any" placeholder="값 입력 시 일괄 덮어쓰기">
+                    </div>
+                </form>
+                <p class="middle-text" style="margin-top:6px;color:#666">※ 빈 칸은 변경하지 않습니다.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="applyBatchBtn" class="btn btn-primary">적용</button>
+                <button type="button" id="cancelBatchBtn" class="btn btn-secondary">취소</button>
+            </div>
+        </div>
+    </div>
+
+
+        <div id="saveModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>파일 저장</h3>

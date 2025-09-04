@@ -244,6 +244,13 @@ details > div {
     color: #ffffff;
 }
 
+#batchEditBtn {
+    margin-top: 10px;
+    width: 100%;
+    background-color: #adb5bd;
+    color: #ffffff;
+}
+
 /* File Explorer */
 .file-explorer {
     border: 1px solid #ddd;
@@ -715,4 +722,11 @@ details > div {
     border-radius: 4px;
     font-size: 0.9rem;
     background-color: white;
+}
+
+/* 긴 헤딩 화살표 */
+.heading-arrow-long{
+    pointer-events: none;
+    transform-origin: 50% 90%;
+    filter: drop-shadow(0 0 1px rgba(0,0,0,.35));
 }
