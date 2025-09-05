@@ -251,6 +251,7 @@ class PathMap {
 
         // ★ 복수 선택도 모드 변경 시 초기화
         this.clearSelections();
+        this.refreshAllNodeAppearances();
         
         // 드래그 모드 설정
         this.nodes.forEach(nodeInfo => {
@@ -709,40 +710,47 @@ class PathMap {
         return this.getSelectedNodeIds().map(id => this.nodes.get(id)?.data).filter(Boolean);
     }
     clearSelections() {
+        // 상태만 비우는 게 아니라, 시각 스타일도 강제 원복
         if (this.selectedNode) {
-            this.nodes.get(this.selectedNode)?.marker.getElement()?.classList.remove('selected');
-            this.refreshNodeAppearance(this.selectedNode);
             this.selectedNode = null;
         }
         this.selectedNodes.forEach(id => {
-            this.nodes.get(id)?.marker.getElement()?.classList.remove('selected');
-            this.refreshNodeAppearance(id);
+            // 혹시 남아 있을 수 있는 .selected 방지
+            const el = this.nodes.get(id)?.marker?.getElement();
+            el?.classList.remove('selected');
         });
         this.selectedNodes.clear();
+
+        // 전 노드 외형을 NodeType 기준으로 다시 칠함
+        this.refreshAllNodeAppearances();
+
+        // 패널도 비움
+        this.onNodeSelect?.(null, null);
     }
 
-    toggleSelectNode(id) {
-        const el = this.nodes.get(id)?.marker.getElement();
-        if (!el) return;
 
-        if (this.selectedNodes.has(id)) {
-            this.selectedNodes.delete(id);
-            el.classList.remove('selected');
+    toggleSelectNode(nodeId) {
+        if (this.selectedNodes.has(nodeId)) {
+            this.selectedNodes.delete(nodeId);
         } else {
-            this.selectedNodes.add(id);
-            el.classList.add('selected');
+            this.selectedNodes.add(nodeId);
         }
-        this.refreshNodeAppearance(id);
+        this.refreshNodeAppearance(nodeId);
 
-        // 패널 텍스트 갱신
+        // 패널 갱신
         if (this.onNodeSelect) {
-            if (this.selectedNodes.size >= 2) this.onNodeSelect(null, null);
-            else if (this.selectedNodes.size === 1) {
-                const one = [...this.selectedNodes][0];
-                this.onNodeSelect(one, this.nodes.get(one)?.data || null);
-            } else this.onNodeSelect(null, null);
+            if (this.selectedNodes.size >= 2) {
+                this.onNodeSelect(null, null);
+            } else if (this.selectedNodes.size === 1) {
+                const id = [...this.selectedNodes][0];
+                const nd = this.nodes.get(id)?.data || null;
+                this.onNodeSelect(id, nd);
+            } else {
+                this.onNodeSelect(null, null);
+            }
         }
     }
+
 
 
     // --- 구간 노드 생성 관련 함수들 ---
@@ -870,26 +878,27 @@ class PathMap {
         }
     }
 
-    selectOnly(id) {
-        // 기존 선택 해제
-        this.selectedNodes?.forEach(nid => {
-            this.nodes.get(nid)?.marker.getElement()?.classList.remove('selected');
-            this.refreshNodeAppearance(nid);
-        });
-        this.selectedNodes?.clear?.();
-        if (this.selectedNode && this.selectedNode !== id) {
-            this.nodes.get(this.selectedNode)?.marker.getElement()?.classList.remove('selected');
-            this.refreshNodeAppearance(this.selectedNode);
-        }
+    selectOnly(nodeId) {
+        // 기존 선택 전부 해제
+        this.clearSelections();
 
-        // 새 선택
-        this.selectedNode = id;
-        this.selectedNodes?.add?.(id); // 내부적으로는 1개만 유지해도 OK
-        this.nodes.get(id)?.marker.getElement()?.classList.add('selected');
-        this.refreshNodeAppearance(id);
+        // 단일 선택으로 상태 기록
+        this.selectedNode = nodeId;
+        this.selectedNodes.add(nodeId); // 내부적으로는 1개만 유지
+
+        // 외형 적용
+        this.refreshNodeAppearance(nodeId);
 
         // 패널 갱신
-        this.onNodeSelect?.(id, this.nodes.get(id)?.data || null);
+        if (this.onNodeSelect) {
+            const nd = this.nodes.get(nodeId)?.data || null;
+            this.onNodeSelect(nodeId, nd);
+        }
+    }
+
+
+    isNodeSelected(id) {
+        return this.selectedNodes.has(id) || this.selectedNode === id;
     }
 
     // NodeType → 색상 (요구 색상표)
@@ -910,42 +919,37 @@ class PathMap {
         }
     }
 
-// 마커의 원(div) 엘리먼트 가져오기
+// 마커의 점(div) 엘리먼트
     _getNodeDot(nodeId) {
         const entry = this.nodes.get(nodeId);
         const el = entry?.marker?.getElement();
         return el ? el.querySelector('div') : null;
     }
 
-// 선택/해제 시 외형 적용 (선택: 밝기 1.5배, 테두리 10px)
+// 선택/해제 외형 적용(밝기 1.5배 + 테두리 5배)
     _applySelectVisual(nodeId, selected) {
         const entry = this.nodes.get(nodeId);
         const dot = this._getNodeDot(nodeId);
         if (!entry || !dot) return;
 
-        const base = this.nodeTypeToColor(entry.data?.NodeType);
-        dot.style.backgroundColor = base;
-        dot.style.filter = selected ? 'brightness(1.5)' : '';
-        dot.style.border = selected ? '10px solid white' : '2px solid white';
+        // 기본색(항상 NodeType 기준으로 다시 칠함)
+        dot.style.backgroundColor = this.nodeTypeToColor(entry.data?.NodeType);
+        dot.style.filter       = selected ? 'brightness(1.5)' : '';
+        dot.style.border       = selected ? '10px solid white' : '2px solid white';
 
+        // 혹시 남아 있을지도 모를 .selected 클래스는 항상 제거(충돌 예방)
         const root = entry.marker.getElement();
-        if (selected) root.classList.add('selected'); else root.classList.remove('selected');
+        root?.classList.remove('selected');
     }
 
 
+// 단일 노드 외형 새로고침
     refreshNodeAppearance(nodeId) {
-        const info = this.nodes.get(nodeId);
-        if (!info) return;
+        this._applySelectVisual(nodeId, this.isNodeSelected(nodeId));
+    }
 
-        // 1) 기본색: NodeType
-        const base = this.nodeTypeToColor(info.data.NodeType);
-        const el = info.marker.getElement()?.querySelector('div');
-        if (!el) return;
-        el.style.backgroundColor = base;
-
-        // 2) 선택 상태면 밝기/테두리 굵기 (CSS .selected 규칙 + 여기서도 보정)
-        const isSelected = this.selectedNodes?.has(nodeId) || this.selectedNode === nodeId;
-        el.style.filter = isSelected ? 'brightness(1.5)' : '';
-        el.style.borderWidth = isSelected ? '10px' : '2px';
+// 전 노드 새로고침
+    refreshAllNodeAppearances() {
+        this.nodes.forEach((_, id) => this.refreshNodeAppearance(id));
     }
 }
