@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+  patheditor:
+    image: harbor.cu.ac.kr/patheditor/patheditor:latest
+    container_name: patheditor
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./data:/app/backend/data
+    restart: unless-stopped
