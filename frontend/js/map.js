@@ -194,6 +194,7 @@ class PathMap {
     resetQuickLinkSelection() {
         if (this.quickLinkFirstNode) {
             this.highlightNode(this.quickLinkFirstNode.nodeId, '#e74c3c'); // 원래 색상으로 복원
+            this.refreshNodeAppearance(this.quickLinkFirstNode.nodeId);
             this.quickLinkFirstNode = null;
         }
     }
@@ -272,20 +273,15 @@ class PathMap {
         const { GpsInfo, ID } = nodeData;
         const latlng = [GpsInfo.Lat, GpsInfo.Long];
 
-        // 일반 마커로 변경 (CircleMarker 대신 Marker 사용)
+        const baseColor = this.nodeTypeToColor(nodeData.NodeType);
         const customIcon = L.divIcon({
             className: 'node-marker',
-            html: `<div style="background-color: #e74c3c; border: 2px solid white; border-radius: 50%; width: 16px; height: 16px;"></div>`,
-            iconSize: [16, 16],
-            iconAnchor: [8, 8]
+            html: `<div style="background-color:${baseColor}; border:2px solid white; border-radius:50%; width:16px; height:16px;"></div>`,
+            iconSize: [16,16],
+            iconAnchor: [8,8]
         });
 
-        const marker = L.marker(latlng, {
-            icon: customIcon,
-            draggable: false
-        });
-
-        // 드래그 상태 추적을 위한 플래그
+        const marker = L.marker(latlng, { icon: customIcon, draggable: false });
         marker._isDraggable = false;
         marker._nodeId = ID;
 
@@ -332,13 +328,14 @@ class PathMap {
             }
         });
 
-        // 지도에 추가
         marker.addTo(this.map);
-
-        // 저장
         this.nodes.set(ID, { marker, data: nodeData });
-        this.updateHeadingForNode(ID);
 
+        // 선택 상태 반영(밝기/테두리)
+        this.refreshNodeAppearance(ID);
+
+        // 헤딩 화살표 쓰신다면 유지
+        this.updateHeadingForNode?.(ID);
 
         return marker;
     }
@@ -434,14 +431,12 @@ class PathMap {
     }
 
     selectNode(nodeId) {
-        // 이전 선택 해제
-        if (this.selectedNode) {
-            this.highlightNode(this.selectedNode, '#e74c3c');
-        }
 
-        // 새 노드 선택
+        if (this.selectedNode && this.selectedNode !== nodeId) {
+            this._applySelectVisual(this.selectedNode, false);
+        }
         this.selectedNode = nodeId;
-        this.highlightNode(nodeId, '#f1c40f');
+        this._applySelectVisual(nodeId, true);
 
         if (this.onNodeSelect) {
             const nodeInfo = this.nodes.get(nodeId);
@@ -449,23 +444,12 @@ class PathMap {
         }
     }
 
-    highlightNode(nodeId, color) {
-        const nodeInfo = this.nodes.get(nodeId);
-        if (nodeInfo) {
-            const element = nodeInfo.marker.getElement();
-            if (element) {
-                const iconDiv = element.querySelector('div');
-                if (iconDiv) {
-                    iconDiv.style.backgroundColor = color;
-                }
-                
-                // 선택된 노드 클래스 추가/제거
-                if (color === '#f1c40f') {
-                    element.classList.add('selected');
-                } else {
-                    element.classList.remove('selected');
-                }
-            }
+    highlightNode(nodeId /*, _colorIgnored */) {
+        // 상태는 class로, 색은 NodeType + refresh 로 통일
+        const info = this.nodes.get(nodeId);
+        if (info) {
+            // 호출자가 색 인자를 줘도 무시하고, 실제 외형은 여기서만 결정
+            this.refreshNodeAppearance(nodeId);
         }
     }
 
@@ -725,38 +709,41 @@ class PathMap {
         return this.getSelectedNodeIds().map(id => this.nodes.get(id)?.data).filter(Boolean);
     }
     clearSelections() {
-        // 단일 선택 하이라이트도 복원
         if (this.selectedNode) {
-            this.highlightNode(this.selectedNode, '#e74c3c');
+            this.nodes.get(this.selectedNode)?.marker.getElement()?.classList.remove('selected');
+            this.refreshNodeAppearance(this.selectedNode);
+            this.selectedNode = null;
         }
-        // 복수 선택 하이라이트 복원
-        this.selectedNodes.forEach(id => this.highlightNode(id, '#e74c3c'));
-        this.selectedNode = null;
+        this.selectedNodes.forEach(id => {
+            this.nodes.get(id)?.marker.getElement()?.classList.remove('selected');
+            this.refreshNodeAppearance(id);
+        });
         this.selectedNodes.clear();
     }
-    toggleSelectNode(nodeId) {
-        if (this.selectedNodes.has(nodeId)) {
-            // 해제
-            this.selectedNodes.delete(nodeId);
-            this.highlightNode(nodeId, '#e74c3c');
-        } else {
-            this.selectedNodes.add(nodeId);
-            this.highlightNode(nodeId, '#f1c40f'); // 선택색
-        }
 
-        // UI에 선택 변경 알리기(정보 패널 갱신)
+    toggleSelectNode(id) {
+        const el = this.nodes.get(id)?.marker.getElement();
+        if (!el) return;
+
+        if (this.selectedNodes.has(id)) {
+            this.selectedNodes.delete(id);
+            el.classList.remove('selected');
+        } else {
+            this.selectedNodes.add(id);
+            el.classList.add('selected');
+        }
+        this.refreshNodeAppearance(id);
+
+        // 패널 텍스트 갱신
         if (this.onNodeSelect) {
-            if (this.selectedNodes.size >= 2) {
-                this.onNodeSelect(null, null); // UI가 "여러 개 선택됨"을 렌더하도록
-            } else if (this.selectedNodes.size === 1) {
-                const id = this.getSelectedNodeIds()[0];
-                const nd = this.nodes.get(id)?.data || null;
-                this.onNodeSelect(id, nd);
-            } else {
-                this.onNodeSelect(null, null);
-            }
+            if (this.selectedNodes.size >= 2) this.onNodeSelect(null, null);
+            else if (this.selectedNodes.size === 1) {
+                const one = [...this.selectedNodes][0];
+                this.onNodeSelect(one, this.nodes.get(one)?.data || null);
+            } else this.onNodeSelect(null, null);
         }
     }
+
 
     // --- 구간 노드 생성 관련 함수들 ---
 
@@ -883,17 +870,82 @@ class PathMap {
         }
     }
 
-    selectOnly(nodeId) {
-        // 기존 선택 전부 해제하고 하나만
-        this.clearSelections();
-        this.selectedNode = nodeId;
-        this.selectedNodes.add(nodeId);        // 내부적으로는 Set으로 1개만 유지
-        this.highlightNode(nodeId, '#f1c40f');
-        if (this.onNodeSelect) {
-            const nd = this.nodes.get(nodeId)?.data || null;
-            this.onNodeSelect(nodeId, nd);
+    selectOnly(id) {
+        // 기존 선택 해제
+        this.selectedNodes?.forEach(nid => {
+            this.nodes.get(nid)?.marker.getElement()?.classList.remove('selected');
+            this.refreshNodeAppearance(nid);
+        });
+        this.selectedNodes?.clear?.();
+        if (this.selectedNode && this.selectedNode !== id) {
+            this.nodes.get(this.selectedNode)?.marker.getElement()?.classList.remove('selected');
+            this.refreshNodeAppearance(this.selectedNode);
+        }
+
+        // 새 선택
+        this.selectedNode = id;
+        this.selectedNodes?.add?.(id); // 내부적으로는 1개만 유지해도 OK
+        this.nodes.get(id)?.marker.getElement()?.classList.add('selected');
+        this.refreshNodeAppearance(id);
+
+        // 패널 갱신
+        this.onNodeSelect?.(id, this.nodes.get(id)?.data || null);
+    }
+
+    // NodeType → 색상 (요구 색상표)
+    nodeTypeToColor(nt) {
+        switch (Number(nt)) {
+            case 1:  return 'rgb(255,0,0)';      // Red
+            case 2:  return 'rgb(0,255,0)';      // Green
+            case 3:  return 'rgb(0,0,255)';      // Blue
+            case 4:  return 'rgb(255,255,0)';    // Yellow
+            case 5:  return 'rgb(255,0,255)';    // Magenta
+            case 6:  return 'rgb(0,255,255)';    // Cyan
+            case 7:  return 'rgb(255,165,0)';    // Orange
+            case 8:  return 'rgb(128,0,128)';    // Purple
+            case 9:  return 'rgb(255,192,203)';  // Pink
+            case 10: return 'rgb(165,42,42)';    // Brown
+            case 11: return 'rgb(128,128,128)';  // Gray
+            default: return 'rgb(0,0,0)';        // Black
         }
     }
 
+// 마커의 원(div) 엘리먼트 가져오기
+    _getNodeDot(nodeId) {
+        const entry = this.nodes.get(nodeId);
+        const el = entry?.marker?.getElement();
+        return el ? el.querySelector('div') : null;
+    }
 
+// 선택/해제 시 외형 적용 (선택: 밝기 1.5배, 테두리 10px)
+    _applySelectVisual(nodeId, selected) {
+        const entry = this.nodes.get(nodeId);
+        const dot = this._getNodeDot(nodeId);
+        if (!entry || !dot) return;
+
+        const base = this.nodeTypeToColor(entry.data?.NodeType);
+        dot.style.backgroundColor = base;
+        dot.style.filter = selected ? 'brightness(1.5)' : '';
+        dot.style.border = selected ? '10px solid white' : '2px solid white';
+
+        const root = entry.marker.getElement();
+        if (selected) root.classList.add('selected'); else root.classList.remove('selected');
+    }
+
+
+    refreshNodeAppearance(nodeId) {
+        const info = this.nodes.get(nodeId);
+        if (!info) return;
+
+        // 1) 기본색: NodeType
+        const base = this.nodeTypeToColor(info.data.NodeType);
+        const el = info.marker.getElement()?.querySelector('div');
+        if (!el) return;
+        el.style.backgroundColor = base;
+
+        // 2) 선택 상태면 밝기/테두리 굵기 (CSS .selected 규칙 + 여기서도 보정)
+        const isSelected = this.selectedNodes?.has(nodeId) || this.selectedNode === nodeId;
+        el.style.filter = isSelected ? 'brightness(1.5)' : '';
+        el.style.borderWidth = isSelected ? '10px' : '2px';
+    }
 }

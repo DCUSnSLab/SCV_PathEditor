@@ -533,6 +533,7 @@ class UIManager {
                     if (window.pathMap && window.pathMap.nodes.has(nodeId)) {
                         window.pathMap.nodes.get(nodeId).data = merged;
                         window.pathMap.updateHeadingForNode(nodeId); // 헤딩 화살표 즉시 반영
+                        window.pathMap.refreshNodeAppearance(nodeId); // NodeType 색/선택 비주얼 갱신
                     }
                     this.updateNodeTable();
                     this.updateSelectedNodeInfo(nodeId, merged);
@@ -852,6 +853,7 @@ class UIManager {
             if (window.pathMap?.nodes.has(id)) {
                 window.pathMap.nodes.get(id).data = this.currentData.Node[idx];
                 window.pathMap.updateHeadingForNode(id);
+                window.pathMap.refreshNodeAppearance(id);
             }
         });
 
