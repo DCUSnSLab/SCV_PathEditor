@@ -1,0 +1,97 @@
+{
+    "Node": [
+        {
+            "ID": "N0268",
+            "AdminCode": "",
+            "NodeType": 1,
+            "ITSNodeID": "",
+            "Maker": "SCV Web Editor",
+            "UpdateDate": "20250905",
+            "Version": "2021",
+            "Remark": "",
+            "HistType": "02A",
+            "HistRemark": "Web Editor로 생성",
+            "Heading": -1.0,
+            "GpsInfo": {
+                "Lat": 37.567737,
+                "Long": 126.981536,
+                "Alt": 0.0
+            },
+            "UtmInfo": {
+                "Easting": 320965.3714859859,
+                "Northing": 4160304.0366607616,
+                "Zone": "52N"
+            }
+        },
+        {
+            "ID": "N0269",
+            "AdminCode": "",
+            "NodeType": 2,
+            "ITSNodeID": "",
+            "Maker": "SCV Web Editor",
+            "UpdateDate": "20250905",
+            "Version": "2021",
+            "Remark": "",
+            "HistType": "02A",
+            "HistRemark": "Web Editor로 생성",
+            "Heading": -1.0,
+            "GpsInfo": {
+                "Lat": 37.565645,
+                "Long": 126.982684,
+                "Alt": 0.0
+            },
+            "UtmInfo": {
+                "Easting": 321067.2450059859,
+                "Northing": 4160071.155220762,
+                "Zone": "52N"
+            }
+        },
+        {
+            "ID": "N0270",
+            "AdminCode": "",
+            "NodeType": 3,
+            "ITSNodeID": "",
+            "Maker": "SCV Web Editor",
+            "UpdateDate": "20250905",
+            "Version": "2021",
+            "Remark": "",
+            "HistType": "02A",
+            "HistRemark": "Web Editor로 생성",
+            "Heading": -1.0,
+            "GpsInfo": {
+                "Lat": 37.567559,
+                "Long": 126.984057,
+                "Alt": 0.0
+            },
+            "UtmInfo": {
+                "Easting": 321189.085025986,
+                "Northing": 4160284.2217007615,
+                "Zone": "52N"
+            }
+        },
+        {
+            "ID": "N0271",
+            "AdminCode": "",
+            "NodeType": 4,
+            "ITSNodeID": "",
+            "Maker": "SCV Web Editor",
+            "UpdateDate": "20250905",
+            "Version": "2021",
+            "Remark": "",
+            "HistType": "02A",
+            "HistRemark": "Web Editor로 생성",
+            "Heading": -1.0,
+            "GpsInfo": {
+                "Lat": 37.569413,
+                "Long": 126.982867,
+                "Alt": 0.0
+            },
+            "UtmInfo": {
+                "Easting": 321083.48442598525,
+                "Northing": 4160490.608980761,
+                "Zone": "52N"
+            }
+        }
+    ],
+    "Link": []
+}
