@@ -4,6 +4,8 @@ from typing import List
 import json
 import tempfile
 import os
+from pydantic import BaseModel
+from pathlib import Path
 
 from ..models.path_models import (
     Node, Link, PathData, NodeCreate, LinkCreate, 
@@ -213,3 +215,101 @@ async def delete_link(link_id: str):
         return {"message": f"Link {link_id} deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# 안전한 경로 합성: 데이터 루트 밖으로 못 나가게 보호
+def _resolve_path(rel_path: str) -> Path:
+    base = Path(path_service.data_dir).resolve()
+    target = (base / rel_path).resolve()
+    if base == target or str(target).startswith(str(base) + os.sep):
+        return target
+    raise HTTPException(status_code=400, detail="Invalid path (outside data dir)")
+
+class MkdirReq(BaseModel):
+    path: str  # 생성할 폴더의 '상대 경로' (예: 'subdir' 또는 'a/b/new')
+
+class DeleteReq(BaseModel):
+    path: str  # 삭제할 파일의 '상대 경로' (예: 'a/sample.json')
+
+class MoveReq(BaseModel):
+    src: str   # 파일의 '상대 경로' (예: 'a/foo.json')
+    dest: str  # '대상 폴더'의 '상대 경로' (예: 'b' 또는 'b/c')
+
+@router.post("/files/mkdir")
+async def create_folder(req: MkdirReq):
+    """폴더 생성"""
+    try:
+        target = _resolve_path(req.path)
+        target.mkdir(parents=True, exist_ok=False)
+        return {"message": f"Folder created: {req.path}"}
+    except FileExistsError:
+        raise HTTPException(status_code=409, detail="Folder already exists")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/files/delete")
+async def delete_file(req: DeleteReq):
+    """파일 삭제(폴더는 대상 아님)"""
+    try:
+        target = _resolve_path(req.path)
+        if not target.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        if target.is_dir():
+            raise HTTPException(status_code=400, detail="Deleting folders is not allowed")
+        # (원하면 확장자 제한) if target.suffix.lower() != ".json": raise HTTPException(400, "Only .json")
+        target.unlink()
+        return {"message": f"Deleted: {req.path}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/files/move")
+async def move_file(req: MoveReq):
+    """파일을 폴더로 이동 (dest는 '폴더')"""
+    try:
+        src = _resolve_path(req.src)
+        if not src.exists() or not src.is_file():
+            raise HTTPException(status_code=404, detail="Source file not found")
+
+        dest_dir = _resolve_path(req.dest) if req.dest else Path(path_service.data_dir).resolve()
+        if not dest_dir.exists():
+            raise HTTPException(status_code=404, detail="Destination folder not found")
+        if not dest_dir.is_dir():
+            raise HTTPException(status_code=400, detail="Destination must be a folder")
+
+        dest = dest_dir / src.name
+        # 동일 파일명 존재 시 충돌
+        if dest.exists():
+            raise HTTPException(status_code=409, detail="A file with the same name already exists in destination")
+
+        src.replace(dest)  # 원자적 move 시도
+        return {"message": f"Moved: {req.src} -> {req.dest}/"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/files/dirs", response_model=List[str])
+async def list_directories():
+    """
+    데이터 루트 아래의 디렉터리 상대경로 목록 반환 (빈 폴더 포함)
+    예: ["demo", "demo/new-sub", "configs"]
+    """
+    base = Path(path_service.data_dir).resolve()
+    if not base.exists():
+        return []
+
+    dirs = []
+    for p in base.rglob("*"):
+        if p.is_dir():
+            rel = p.relative_to(base).as_posix()
+            if rel:  # 루트("") 제외
+                dirs.append(rel)
+
+    dirs.sort()
+    return dirs
