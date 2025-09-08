@@ -63,7 +63,7 @@ spec:
       containers:
       - name: scv-path-editor
         # This image will be updated by the Jenkins pipeline
-        image: your-docker-registry/scv-path-editor:latest
+        image: junhp1234/patheditor:latest
         ports:
         - containerPort: 8000
         volumeMounts:
