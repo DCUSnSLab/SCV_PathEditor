@@ -9,7 +9,7 @@ metadata:
   labels:
     type: local
 spec:
-  storageClassName: standard
+  storageClassName: longhorn
   capacity:
     storage: 1Gi
   accessModes:
@@ -28,7 +28,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: scv-path-editor-pvc
 spec:
-  storageClassName: standard
+  storageClassName: longhorn
   accessModes:
     - ReadWriteOnce
   resources:
@@ -78,9 +78,20 @@ spec:
           limits:
             cpu: "500m"
             memory: "512Mi"
-
+      affinity:
+        nodeAffinity:
+          # 필수 조건: n1~n4 노드에만 배치
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - n1-k8s
+                - n2-k8s
+                - n3-k8s
+                - n4-k8s
 ---
-
 # ------------------------ Service ------------------------ #
 # The service is now of type NodePort, exposing the application on a static port on each node.
 apiVersion: v1
