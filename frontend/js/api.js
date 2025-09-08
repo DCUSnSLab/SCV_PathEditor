@@ -33,10 +33,13 @@ class PathAPI {
             throw error;
         }
     }
-
-    // 파일 관련 API
+// 캐시 방지용 쿼리와 fetch 옵션을 추가
     async listFiles() {
-        return await this.request('/files');
+        return await this.request(`/files?_=${Date.now()}`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache' }
+        });
     }
 
     async loadPathData(filename) {
@@ -161,6 +164,41 @@ class PathAPI {
         }
         return response.json();
     }
+
+    // 파일/폴더 조작
+    async createFolder(path) {
+        return await this.request('/files/mkdir', {
+            method: 'POST',
+            body: JSON.stringify({ path })
+        });
+    }
+
+    async deleteFile(path) {
+        return await this.request('/files/delete', {
+            method: 'POST',
+            body: JSON.stringify({ path })
+        });
+    }
+
+    async moveFile(src, dest) {
+        // dest는 '대상 폴더 경로' (예: 'subdir')
+        // 서버에서 최종 목적지는 `${dest}/${basename(src)}`로 처리
+        return await this.request('/files/move', {
+            method: 'POST',
+            body: JSON.stringify({ src, dest })
+        });
+    }
+
+    async listDirs() {
+        const res = await this.request(`/files/dirs?_=${Date.now()}`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache' }
+        });
+        // 방탄: 배열/객체 모두 허용
+        return Array.isArray(res) ? res : (res?.directories ?? []);
+    }
+
 }
 
 // 전역 API 인스턴스
