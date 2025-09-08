@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Response
 from fastapi.responses import FileResponse
 from typing import List
 import json
@@ -20,10 +20,20 @@ path_service = PathService()
 
 
 @router.get("/files", response_model=List[str])
-async def list_files():
-    """사용 가능한 JSON 파일 목록 반환"""
+async def list_files(response: Response):
+    """
+    데이터 루트 하위의 모든 .json 파일을 상대경로로 반환
+    예: ["test/20250822.json", "wtf/color.json", "root.json"]
+    """
+    base = Path(path_service.data_dir).resolve()
+    response.headers["Cache-Control"] = "no-store"  # 캐시 방지(선택)
     try:
-        files = path_service.list_available_files()
+        files = [
+            p.relative_to(base).as_posix()
+            for p in base.rglob("*.json")
+            if p.is_file()
+        ]
+        files.sort()
         return files
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -295,21 +305,14 @@ async def move_file(req: MoveReq):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/files/dirs", response_model=List[str])
-async def list_directories():
-    """
-    데이터 루트 아래의 디렉터리 상대경로 목록 반환 (빈 폴더 포함)
-    예: ["demo", "demo/new-sub", "configs"]
-    """
+async def list_directories(response: Response):
+    response.headers["Cache-Control"] = "no-store"
     base = Path(path_service.data_dir).resolve()
     if not base.exists():
         return []
-
-    dirs = []
-    for p in base.rglob("*"):
-        if p.is_dir():
-            rel = p.relative_to(base).as_posix()
-            if rel:  # 루트("") 제외
-                dirs.append(rel)
-
+    dirs = [
+        p.relative_to(base).as_posix()
+        for p in base.rglob("*") if p.is_dir() and p != base
+    ]
     dirs.sort()
     return dirs

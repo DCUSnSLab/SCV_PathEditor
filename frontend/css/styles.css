@@ -735,3 +735,7 @@ details > div {
     background-color: #fff3cd;  /* 은은한 노랑 */
     border: 1px dashed #f0ad4e;
 }
+
+.file-explorer-pathbar { display:flex; gap:.5rem; align-items:center; padding:4px 6px; }
+#fileExplorerPath { font-family:ui-monospace,monospace; opacity:.8; }
+.file-item.folder.up .file-name { font-weight:600; }

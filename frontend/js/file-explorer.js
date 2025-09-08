@@ -5,13 +5,11 @@ class FileExplorer {
         this.selectedFile = null;
         this.onFileSelect = null;
         this.contextMenu = null;
-        
-        this.init();
-
         this.currentFolder = localStorage.getItem('fe:currentFolder') || ''; // '' = 루트
         this.expandedPaths = new Set(
             JSON.parse(localStorage.getItem('fe:expanded') || '[]')
         );
+        this.init();
     }
 
     init() {
@@ -71,7 +69,7 @@ class FileExplorer {
 // file-explorer.js
     async loadFileTree(keepState = true) {
         try {
-            showLoading();
+            this.showLoading();
             const [files, dirs] = await Promise.all([
                 pathAPI.listFiles(),  // 배열
                 pathAPI.listDirs(),   // 배열(또는 방탄 처리로 배열화)
@@ -84,10 +82,12 @@ class FileExplorer {
                 }
 
             this.renderFileTree(this.treeData);   // ✅ 여기! this.render() → this.renderFileTree(...)
+            this.updatePathLabel();
         } catch (err) {
             handleAPIError(err, '파일 목록을 불러올 수 없습니다');
+            this.showError('파일 목록을 불러오는 중 오류가 발생했습니다.');
         } finally {
-            hideLoading();
+            // 전역 오버레이가 아니라면 따로 닫을 필요 없음
         }
     }
 
@@ -124,7 +124,7 @@ class FileExplorer {
                 });
 
         files.forEach(filename => {
-            const parts = filename.split('/');
+            const parts = filename.split('/').filter(Boolean);
             let current = tree;
 
             parts.forEach((part, index) => {
@@ -183,8 +183,30 @@ class FileExplorer {
     }
 
     renderFileTree(tree) {
+        this.updatePathLabel();
         this.container.innerHTML = '';
-        this.renderNode(tree, 0);
+
+        // 현재 폴더 노드 찾기
+            let root = this.findFolderNode(this.currentFolder);
+        if (!root) {
+            // 깨진 상태 복구: 루트로 이동
+                this.currentFolder = '';
+            this.saveExplorerState();
+            root = this.treeData;
+            }
+         // 상위 폴더 항목("..") 제공
+        if (this.currentFolder) {
+            const up = document.createElement('div');
+            up.className = 'file-item folder up';
+            up.innerHTML = `<span class="folder-toggle empty"></span><span class="file-icon"></span><span class="file-name">..</span>`;
+            up.addEventListener('click', () => {
+                const parent = this.currentFolder.split('/').filter(Boolean).slice(0,-1).join('/');
+                this.enterFolder(parent);
+            });
+            this.container.appendChild(up);
+        }
+         // 현재 폴더의 자식들만 렌더
+        (root.children || []).forEach(child => this.renderNode(child, 0));
     }
 
     renderNode(node, level) {
@@ -249,9 +271,9 @@ class FileExplorer {
         // 클릭 이벤트
         item.addEventListener('click', (e) => {
             e.stopPropagation();
-            
             if (node.type === 'folder') {
-                this.toggleFolder(item, node);
+            // 폴더 이름/행 클릭 = 해당 폴더로 들어가기
+                this.enterFolder(node.fullPath || '');
             } else {
                 this.selectFile(item, node);
             }
@@ -260,10 +282,12 @@ class FileExplorer {
         // 더블클릭 이벤트 (파일 열기)
         item.addEventListener('dblclick', (e) => {
             e.stopPropagation();
-            
-            if (node.type !== 'folder') {
-                this.loadFile(node.fullPath);
-            }
+
+            if (node.type === 'folder') {
+                this.enterFolder(node.fullPath || '');
+                } else {
+                    this.loadFile(node.fullPath);
+                }
         });
 
         // 우클릭 컨텍스트 메뉴
@@ -449,7 +473,6 @@ class FileExplorer {
         if (!name) return;
 
         const target = base ? `${base}/${name}` : name;
-
         try {
             await pathAPI.createFolder(target);
             showNotification(`폴더 생성: ${target}`, 'success');
@@ -566,4 +589,44 @@ class FileExplorer {
             cur = next;
         }
     }
+
+    updatePathLabel() {
+        const label = document.getElementById('fileExplorerPath');
+        const upBtn = document.getElementById('goUpFolder');
+        const rootBtn = document.getElementById('goRootFolder');
+        const p = this.currentFolder || '';
+        if (label) label.textContent = '/' + p;
+        if (upBtn) {
+            upBtn.disabled = !p;
+            upBtn.onclick = () => {
+                const parent = p.split('/').filter(Boolean).slice(0, -1).join('/');
+                this.enterFolder(parent);
+            };
+        }
+        if (rootBtn) {
+            rootBtn.onclick = () => this.enterFolder('');
+        }
+    }
+
+    findFolderNode(path) {
+        // ''면 트리 루트 반환
+        if (!path) return this.treeData;
+        const parts = path.split('/').filter(Boolean);
+        let cur = this.treeData;
+        for (const part of parts) {
+            cur = (cur.children || []).find(c => c.type === 'folder' && c.name === part);
+            if (!cur) return null;
+        }
+        return cur;
+    }
+
+    enterFolder(path) {
+        // path: 상대 경로('' = 루트)
+        this.currentFolder = path || '';
+        if (this.currentFolder) this.expandedPaths.add(this.currentFolder);
+        this.saveExplorerState();
+        this.renderFileTree(this.treeData);   // 현재 폴더 뷰로 다시 그리기
+        this.updatePathLabel();
+    }
+
 }
