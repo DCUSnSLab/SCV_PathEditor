@@ -551,27 +551,32 @@ class UIManager {
         }
         // --------- 수정 분기 끝 ----------
 
-        // ⬇ 새 노드 생성 분기 (기존과 동일)
-        const utmX = 302485.85 + (lng - 126.7732925755467) * 88740;
-        const utmY = 4123756.89 + (lat - 37.239429897406026) * 111320;
-
-        const nodeData = {
-            AdminCode: "",
-            NodeType: nodeType,
-            ITSNodeID: "",
-            Maker: maker,
-            UpdateDate: new Date().toISOString().slice(0, 10).replace(/-/g, ''),
-            Version: "2021",
-            Remark: remark,
-            HistType: "02A",
-            HistRemark: "Web Editor로 생성",
-            Heading: heading,
-            GpsInfo: { Lat: lat, Long: lng, Alt: alt },
-            UtmInfo: { Easting: utmX, Northing: utmY, Zone: "52N" }
-        };
-
+        // ⬇ 새 노드 생성 분기 - 정확한 UTM 좌표 변환 사용
         try {
             showLoading();
+            
+            // 백엔드 API를 통해 정확한 UTM 좌표 변환
+            const utmData = await pathAPI.latLngToUtm(lat, lng);
+            
+            const nodeData = {
+                AdminCode: "",
+                NodeType: nodeType,
+                ITSNodeID: "",
+                Maker: maker,
+                UpdateDate: new Date().toISOString().slice(0, 10).replace(/-/g, ''),
+                Version: "2021",
+                Remark: remark,
+                HistType: "02A",
+                HistRemark: "Web Editor로 생성",
+                Heading: heading,
+                GpsInfo: { Lat: lat, Long: lng, Alt: alt },
+                UtmInfo: { 
+                    Easting: utmData.easting, 
+                    Northing: utmData.northing, 
+                    Zone: `${utmData.zone_number}${utmData.zone_letter}` 
+                }
+            };
+
             const newNode = await pathAPI.createNode(nodeData);
             if (newNode.Heading === undefined) newNode.Heading = nodeData.Heading;
 
