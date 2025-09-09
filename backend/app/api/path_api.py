@@ -15,8 +15,21 @@ from ..services.path_service import PathService
 
 router = APIRouter(prefix="/api/path", tags=["path"])
 
+
 # 전역 서비스 인스턴스
 path_service = PathService()
+BASE_DIR = Path(path_service.data_dir).resolve()
+
+
+def _safe_join(rel: str) -> Path:
+    # 상대경로를 절대경로로 변환하고, 데이터 루트 밖으로 나가는 것을 차단
+    p = (BASE_DIR / rel).resolve()
+    if not str(p).startswith(str(BASE_DIR)):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return p
+
 
 
 @router.get("/files", response_model=List[str])
@@ -316,3 +329,24 @@ async def list_directories(response: Response):
     ]
     dirs.sort()
     return dirs
+
+@router.api_route("/load/{rel_path:path}", methods=["GET", "POST"])
+async def load_file_rel(rel_path: str, response: Response):
+    """
+    예: /api/path/load/test/bae_d2_test_1.json
+    """
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        fp = _safe_join(rel_path)
+        with fp.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# (선택) 쿼리파라미터 버전도 지원하면 프런트가 더 안전해짐
+@router.get("/load")
+async def load_file_query(path: str, response: Response):
+    response.headers["Cache-Control"] = "no-store"
+    return await load_file_rel(path, response)
