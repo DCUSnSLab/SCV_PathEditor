@@ -289,14 +289,14 @@
             "HistRemark": "자동 생성",
             "Heading": -1.0,
             "GpsInfo": {
-                "Lat": 35.914324,
-                "Long": 128.803077,
+                "Lat": 35.91432511382109,
+                "Long": 128.80307558923963,
                 "Alt": 0.0
             },
             "UtmInfo": {
-                "Easting": 482232.6,
-                "Northing": 3974463.74,
-                "Zone": "52N"
+                "Easting": 482232.48276332713,
+                "Northing": 3974463.834277375,
+                "Zone": "52S"
             }
         },
         {
@@ -733,6 +733,52 @@
             "UtmInfo": {
                 "Easting": 482634.38820598426,
                 "Northing": 3976187.658500761,
+                "Zone": "52N"
+            }
+        },
+        {
+            "ID": "N0032",
+            "AdminCode": "",
+            "NodeType": 1,
+            "ITSNodeID": "",
+            "Maker": "SCV Web Editor",
+            "UpdateDate": "20250909",
+            "Version": "2021",
+            "Remark": "",
+            "HistType": "02A",
+            "HistRemark": "Web Editor로 생성",
+            "Heading": -1.0,
+            "GpsInfo": {
+                "Lat": 35.914351,
+                "Long": 128.80313,
+                "Alt": 0.0
+            },
+            "UtmInfo": {
+                "Easting": 482613.6230459863,
+                "Northing": 3976249.107140762,
+                "Zone": "52N"
+            }
+        },
+        {
+            "ID": "N0033",
+            "AdminCode": "",
+            "NodeType": 1,
+            "ITSNodeID": "",
+            "Maker": "SCV Web Editor",
+            "UpdateDate": "20250909",
+            "Version": "2021",
+            "Remark": "",
+            "HistType": "02A",
+            "HistRemark": "Web Editor로 생성",
+            "Heading": -1.0,
+            "GpsInfo": {
+                "Lat": 35.914344,
+                "Long": 128.803098,
+                "Alt": 0.0
+            },
+            "UtmInfo": {
+                "Easting": 482610.78336598584,
+                "Northing": 3976248.3279007613,
                 "Zone": "52N"
             }
         }
@@ -1267,28 +1313,6 @@
             "HistRemark": "자동 생성"
         },
         {
-            "ID": "L010012",
-            "AdminCode": "110",
-            "RoadRank": 1,
-            "RoadType": 1,
-            "RoadNo": "20",
-            "LinkType": 3,
-            "LaneNo": 2,
-            "R_LinkID": "R_N010",
-            "L_LinkID": "L_N012",
-            "FromNodeID": "N010",
-            "ToNodeID": "N012",
-            "SectionID": "QUICKLINK_SECTION",
-            "Length": 0.00772,
-            "ITSLinkID": "ITS_1757349342825",
-            "Maker": "QuickLink 자동생성",
-            "UpdateDate": "20250908",
-            "Version": "2021",
-            "Remark": "QuickLink로 자동 생성된 링크",
-            "HistType": "02A",
-            "HistRemark": "QuickLink 기능으로 생성"
-        },
-        {
             "ID": "L012011",
             "AdminCode": "110",
             "RoadRank": 1,
@@ -1415,6 +1439,72 @@
             "ITSLinkID": "ITS_1757349688280",
             "Maker": "QuickLink 자동생성",
             "UpdateDate": "20250908",
+            "Version": "2021",
+            "Remark": "QuickLink로 자동 생성된 링크",
+            "HistType": "02A",
+            "HistRemark": "QuickLink 기능으로 생성"
+        },
+        {
+            "ID": "L0100032",
+            "AdminCode": "110",
+            "RoadRank": 1,
+            "RoadType": 1,
+            "RoadNo": "20",
+            "LinkType": 3,
+            "LaneNo": 2,
+            "R_LinkID": "R_N010",
+            "L_LinkID": "L_N0032",
+            "FromNodeID": "N010",
+            "ToNodeID": "N0032",
+            "SectionID": "QUICKLINK_SECTION",
+            "Length": 1.82221,
+            "ITSLinkID": "ITS_1757379462022",
+            "Maker": "QuickLink 자동생성",
+            "UpdateDate": "20250909",
+            "Version": "2021",
+            "Remark": "QuickLink로 자동 생성된 링크",
+            "HistType": "02A",
+            "HistRemark": "QuickLink 기능으로 생성"
+        },
+        {
+            "ID": "L00320033",
+            "AdminCode": "110",
+            "RoadRank": 1,
+            "RoadType": 1,
+            "RoadNo": "20",
+            "LinkType": 3,
+            "LaneNo": 2,
+            "R_LinkID": "R_N0032",
+            "L_LinkID": "L_N0033",
+            "FromNodeID": "N0032",
+            "ToNodeID": "N0033",
+            "SectionID": "QUICKLINK_SECTION",
+            "Length": 0.00294,
+            "ITSLinkID": "ITS_1757379463863",
+            "Maker": "QuickLink 자동생성",
+            "UpdateDate": "20250909",
+            "Version": "2021",
+            "Remark": "QuickLink로 자동 생성된 링크",
+            "HistType": "02A",
+            "HistRemark": "QuickLink 기능으로 생성"
+        },
+        {
+            "ID": "L0033012",
+            "AdminCode": "110",
+            "RoadRank": 1,
+            "RoadType": 1,
+            "RoadNo": "20",
+            "LinkType": 3,
+            "LaneNo": 2,
+            "R_LinkID": "R_N0033",
+            "L_LinkID": "L_N012",
+            "FromNodeID": "N0033",
+            "ToNodeID": "N012",
+            "SectionID": "QUICKLINK_SECTION",
+            "Length": 1.82415,
+            "ITSLinkID": "ITS_1757379466663",
+            "Maker": "QuickLink 자동생성",
+            "UpdateDate": "20250909",
             "Version": "2021",
             "Remark": "QuickLink로 자동 생성된 링크",
             "HistType": "02A",
