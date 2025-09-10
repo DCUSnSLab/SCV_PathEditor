@@ -15,7 +15,7 @@ class PathAPI {
 
         try {
             const response = await fetch(`${this.baseUrl}${url}`, config);
-            
+
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`HTTP ${response.status}: ${errorText}`);
@@ -26,25 +26,48 @@ class PathAPI {
             if (contentType && contentType.includes('application/json')) {
                 return await response.json();
             }
-            
+
             return response;
         } catch (error) {
             console.error('API request failed:', error);
             throw error;
         }
     }
+
 // 캐시 방지용 쿼리와 fetch 옵션을 추가
     async listFiles() {
         return await this.request(`/files?_=${Date.now()}`, {
             method: 'GET',
             cache: 'no-store',
-            headers: { 'Cache-Control': 'no-cache' }
+            headers: {'Cache-Control': 'no-cache'}
         });
     }
 
     async loadPathData(filename) {
-        return await this.request(`/load/${filename}`, { method: 'POST' });
+        const rel = String(filename).replace(/^\/+/, '');
+        const q = encodeURIComponent(rel);
+        // 권장: 쿼리파라미터 GET (/load?path=...)
+        try {
+            return await this.request(`/load?path=${q}`, {
+                method: 'GET',
+                cache: 'no-store',
+                headers: {'Cache-Control': 'no-store'}
+            });
+        } catch (err) {
+            // 폴백1: 경로 파라미터 GET (/load/{rel_path})
+            try {
+                return await this.request(`/load/${rel}`, {
+                    method: 'GET',
+                    cache: 'no-store',
+                    headers: {'Cache-Control': 'no-store'}
+                });
+            } catch (err2) {
+                // 폴백2: 아주 오래된 서버(POST만 열어둔 경우)
+                return await this.request(`/load/${rel}`, {method: 'POST'});
+            }
+        }
     }
+
 
     async savePathData(filename, pathData) {
         return await this.request(`/save/${filename}`, {
