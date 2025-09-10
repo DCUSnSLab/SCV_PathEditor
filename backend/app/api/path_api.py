@@ -4,6 +4,7 @@ from typing import List
 import json
 import tempfile
 import os
+import shutil
 from pydantic import BaseModel
 from pathlib import Path
 
@@ -107,7 +108,7 @@ async def upload_file(file: UploadFile = File(...)):
         # 최종 저장 위치로 이동
         final_path = os.path.join(path_service.data_dir, file.filename)
         os.makedirs(os.path.dirname(final_path), exist_ok=True)
-        os.rename(tmp_file_path, final_path)
+        shutil.move(tmp_file_path, final_path)
         
         return {"message": f"File {file.filename} uploaded successfully"}
     
