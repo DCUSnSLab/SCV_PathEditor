@@ -554,10 +554,10 @@ class UIManager {
         // ⬇ 새 노드 생성 분기 - 정확한 UTM 좌표 변환 사용
         try {
             showLoading();
-            
+
             // 백엔드 API를 통해 정확한 UTM 좌표 변환
             const utmData = await pathAPI.latLngToUtm(lat, lng);
-            
+
             const nodeData = {
                 AdminCode: "",
                 NodeType: nodeType,
@@ -570,13 +570,15 @@ class UIManager {
                 HistRemark: "Web Editor로 생성",
                 Heading: heading,
                 GpsInfo: { Lat: lat, Long: lng, Alt: alt },
-                UtmInfo: { 
-                    Easting: utmData.easting, 
-                    Northing: utmData.northing, 
-                    Zone: `${utmData.zone_number}${utmData.zone_letter}` 
+                UtmInfo: {
+                    Easting: utmData.easting,
+                    Northing: utmData.northing,
+                    Zone: `${utmData.zone_number}${utmData.zone_letter}`
                 }
             };
 
+        try {
+            showLoading();
             const newNode = await pathAPI.createNode(nodeData);
             if (newNode.Heading === undefined) newNode.Heading = nodeData.Heading;
 
