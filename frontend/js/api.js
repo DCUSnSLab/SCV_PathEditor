@@ -222,6 +222,13 @@ class PathAPI {
         return Array.isArray(res) ? res : (res?.directories ?? []);
     }
 
+    async renameFile(path, newName) {
+        return await this.request('/files/rename', {
+            method: 'POST',
+            body: JSON.stringify({ path, new_name: newName })
+        });
+    }
+
 }
 
 // 전역 API 인스턴스

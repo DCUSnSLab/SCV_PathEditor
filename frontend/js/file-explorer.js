@@ -450,18 +450,45 @@ class FileExplorer {
     }
 
     renameFile(node) {
-        const newName = prompt('새 파일명을 입력하세요:', node.name);
-        if (newName && newName !== node.name) {
-            // TODO: 파일명 변경 API 구현
-            showNotification('파일명 변경 기능은 추후 구현될 예정입니다.', 'info');
+        if (node.type === 'folder') {
+            showNotification('폴더 이름 변경은 현재 지원하지 않습니다.', 'warning');
+            return;
         }
+        const newName = prompt('새 파일명을 입력하세요 (.json 포함):', node.name);
+        if (!newName || newName === node.name) return;
+
+        pathAPI.renameFile(node.fullPath, newName)
+            .then(async (res) => {
+                showNotification(`이름 변경: ${node.name} → ${newName}`, 'success');
+                // 상태 유지: 현재 폴더/펼침 상태는 유지하고 목록만 갱신
+                await this.loadFileTree(true);
+                // 가능하면 동일 폴더를 currentFolder로 고정
+                this.currentFolder = (node.fullPath.includes('/'))
+                    ? node.fullPath.split('/').slice(0, -1).join('/')
+                    : '';
+                this.saveExplorerState();
+            })
+            .catch(err => {
+                handleAPIError(err, '이름 변경 중 오류가 발생했습니다');
+            });
     }
 
     deleteFile(node) {
-        if (confirm(`${node.name} 파일을 삭제하시겠습니까?`)) {
-            // TODO: 파일 삭제 API 구현
-            showNotification('파일 삭제 기능은 추후 구현될 예정입니다.', 'info');
+        if (node.type === 'folder') {
+            showNotification('폴더 삭제는 현재 지원하지 않습니다.', 'warning');
+            return;
         }
+        if (!confirm(`${node.name} 파일을 삭제하시겠습니까?`)) return;
+
+        pathAPI.deleteFile(node.fullPath)
+            .then(async () => {
+                showNotification('파일을 삭제했습니다', 'success');
+                this.selectedFile = null;
+                await this.loadFileTree(true); // 펼침/현재 폴더 유지
+            })
+            .catch(err => {
+                handleAPIError(err, '파일 삭제 중 오류가 발생했습니다');
+            });
     }
 
     async createNewFolder() {

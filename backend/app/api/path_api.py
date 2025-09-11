@@ -259,6 +259,11 @@ class MoveReq(BaseModel):
     src: str   # 파일의 '상대 경로' (예: 'a/foo.json')
     dest: str  # '대상 폴더'의 '상대 경로' (예: 'b' 또는 'b/c')
 
+class RenameReq(BaseModel):
+    path: str
+    new_name: str
+
+
 @router.post("/files/mkdir")
 async def create_folder(req: MkdirReq):
     """폴더 생성"""
@@ -351,3 +356,41 @@ async def load_file_rel(rel_path: str, response: Response):
 async def load_file_query(path: str, response: Response):
     response.headers["Cache-Control"] = "no-store"
     return await load_file_rel(path, response)
+
+@router.post("/files/rename")
+async def rename_file(req: RenameReq):
+    """
+    파일 이름 변경 (동일 폴더 내에서 파일명만 교체)
+    - 폴더 삭제/이동과 달리, 파일명만 바꾸도록 제한
+    """
+    try:
+        src = _resolve_path(req.path)
+        if not src.exists() or not src.is_file():
+            raise HTTPException(status_code=404, detail="Source file not found")
+
+        # new_name은 '파일명'만 허용 (경로 금지)
+        if "/" in req.new_name or "\\" in req.new_name:
+            raise HTTPException(status_code=400, detail="new_name should be a file name, not a path")
+
+        # 확장자 정책(원하면 강제): JSON만 허용
+        if not req.new_name.lower().endswith(".json"):
+            raise HTTPException(status_code=400, detail="Only .json files are allowed")
+
+        dest = (src.parent / req.new_name).resolve()
+
+        # 데이터 루트 밖으로 나가지 못하도록 보호
+        base = Path(path_service.data_dir).resolve()
+        if not (str(dest).startswith(str(base) + os.sep) or dest == base):
+            raise HTTPException(status_code=400, detail="Invalid destination (outside data dir)")
+
+        if dest.exists():
+            raise HTTPException(status_code=409, detail="A file with the same name already exists")
+
+        src.rename(dest)
+        new_rel = dest.relative_to(base).as_posix()
+        return {"message": f"Renamed: {req.path} -> {new_rel}", "new_path": new_rel}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
