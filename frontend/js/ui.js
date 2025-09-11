@@ -550,7 +550,6 @@ class UIManager {
             return; // ★ 생성 분기로 내려가지 않도록 종료
         }
         // --------- 수정 분기 끝 ----------
-
         // ⬇ 새 노드 생성 분기 - 정확한 UTM 좌표 변환 사용
         try {
             showLoading();
@@ -577,8 +576,6 @@ class UIManager {
                 }
             };
 
-        try {
-            showLoading();
             const newNode = await pathAPI.createNode(nodeData);
             if (newNode.Heading === undefined) newNode.Heading = nodeData.Heading;
 
@@ -597,7 +594,6 @@ class UIManager {
             hideLoading();
         }
     }
-
 
     async deleteNode(nodeId) {
         if (!confirm(`노드 ${nodeId}를 삭제하시겠습니까?`)) {
