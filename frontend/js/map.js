@@ -32,6 +32,138 @@ class PathMap {
         this.initMap();
     }
 
+    createSatelliteLayerWithFallback() {
+        // Google Satellite 시도
+        const googleSatellite = L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            attribution: '© Google',
+            maxZoom: 30,
+            maxNativeZoom: 21,
+            zoomOffset: 0,
+            subdomains: ['0', '1', '2', '3']
+        });
+
+        // Esri Satellite (fallback)
+        const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+            maxZoom: 30,
+            maxNativeZoom: 18,
+            zoomOffset: 0
+        });
+
+        // Google 타일 로드 실패 시 Esri로 fallback
+        googleSatellite.on('tileerror', (e) => {
+            console.log('Google Satellite 타일 로드 실패, Esri로 전환');
+            if (this.map.hasLayer(googleSatellite)) {
+                this.map.removeLayer(googleSatellite);
+                this.map.addLayer(esriSatellite);
+                this.tileLayers.satellite = esriSatellite;
+            }
+        });
+
+        return googleSatellite;
+    }
+
+    createBingLayer() {
+        // Bing Maps Satellite용 커스텀 레이어
+        const BingLayer = L.TileLayer.extend({
+            getTileUrl: function(coords) {
+                var quadkey = this._coordsToQuadKey(coords.x, coords.y, coords.z);
+                return 'https://ecn.t' + Math.floor(Math.random() * 4) + '.tiles.virtualearth.net/tiles/a' + quadkey + '?g=1';
+            },
+            
+            _coordsToQuadKey: function(x, y, z) {
+                var quadkey = '';
+                for (var i = z; i > 0; i--) {
+                    var digit = 0;
+                    var mask = 1 << (i - 1);
+                    if ((x & mask) !== 0) digit += 1;
+                    if ((y & mask) !== 0) digit += 2;
+                    quadkey += digit;
+                }
+                return quadkey;
+            }
+        });
+
+        return new BingLayer('', {
+            attribution: '© Microsoft Bing Maps',
+            maxZoom: 30,
+            maxNativeZoom: 20, // Bing은 20레벨까지 네이티브 지원
+            zoomOffset: 0,
+            tileSize: 256
+        });
+    }
+
+    createMapboxLayer() {
+        // Mapbox API 키 설정 (여기에 본인 API 키 넣으세요)
+        const MAPBOX_API_KEY = 'pk.eyJ1IjoiYmFja2dyb3VuZG1pbiIsImEiOiJjbWZnZDNoZm0wMGQ1MmpxMHllYWJqYW5nIn0.OGk1et_KaOJONN7kZwOBeQ';
+        
+        const apiKey = MAPBOX_API_KEY
+        
+        // Mapbox Satellite (최고 해상도 - 22레벨)
+        return L.tileLayer(`https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.png?access_token=${apiKey}`, {
+            attribution: '© Mapbox, © OpenStreetMap',
+            maxZoom: 30,
+            maxNativeZoom: 22, // 최고 해상도!
+            tileSize: 512,
+            zoomOffset: -1
+        });
+    }
+
+    createYandexLayer() {
+        // Yandex Maps Satellite (러시아/동유럽 지역 고해상도)
+        return L.tileLayer('https://sat0{s}.maps.yandex.net/tiles?l=sat&v=3.1012.0&x={x}&y={y}&z={z}&lang=ru_RU', {
+            attribution: '© Yandex Maps',
+            maxZoom: 30,
+            maxNativeZoom: 21,
+            zoomOffset: 0,
+            subdomains: ['1', '2', '3', '4']
+        });
+    }
+
+    createCartoLayer() {
+        // CartoDB Positron with high-res satellite overlay
+        return L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/rastertiles/voyager_nolabels/{z}/{x}/{y}.png', {
+            attribution: '© CartoDB, © OpenStreetMap',
+            maxZoom: 30,
+            maxNativeZoom: 20,
+            zoomOffset: 0,
+            subdomains: ['a', 'b', 'c', 'd']
+        });
+    }
+
+    createGoogleHybridLayer() {
+        // Google Hybrid (위성 + 라벨) - 실용적!
+        return L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            attribution: '© Google',
+            maxZoom: 30,
+            maxNativeZoom: 21,
+            zoomOffset: 0,
+            subdomains: ['0', '1', '2', '3']
+        });
+    }
+
+    createGoogleTerrainLayer() {
+        // Google Terrain - 지형 정보 최고!
+        return L.tileLayer('https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+            attribution: '© Google',
+            maxZoom: 30,
+            maxNativeZoom: 20,
+            zoomOffset: 0,
+            subdomains: ['0', '1', '2', '3']
+        });
+    }
+
+    createDarkLayer() {
+        // Dark Mode 지도 - 개쩌는 스타일!
+        return L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', {
+            attribution: '© CartoDB, © OpenStreetMap',
+            maxZoom: 30,
+            maxNativeZoom: 20,
+            zoomOffset: 0,
+            subdomains: ['a', 'b', 'c', 'd']
+        });
+    }
+
     setMapStyle(styleName) {
         if (!this.tileLayers || !this.tileLayers[styleName]) {
             console.error(`Map style '${styleName}' not found.`);
@@ -76,12 +208,18 @@ class PathMap {
         this.tileLayers = {
             street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors',
-                maxZoom: 22
+                maxZoom: 30,
+                maxNativeZoom: 19,
+                zoomOffset: 0
             }),
-            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-                maxZoom: 22
-            })
+            satellite: this.createSatelliteLayerWithFallback(),
+            bing: this.createBingLayer(),
+            mapbox: this.createMapboxLayer(),
+            yandex: this.createYandexLayer(),
+            carto: this.createCartoLayer(),
+            hybrid: this.createGoogleHybridLayer(),
+            terrain: this.createGoogleTerrainLayer(),
+            dark: this.createDarkLayer()
         };
 
         // 기본 타일 레이어 추가
