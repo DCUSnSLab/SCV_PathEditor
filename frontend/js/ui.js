@@ -1208,7 +1208,7 @@ class UIManager {
 
             // 노드들 복사 및 새 ID 생성
             for (const originalNode of originalNodes) {
-                const newNodeId = this._generateNewNodeId();
+                const newNodeId = this._generateNewNodeId(originalNode.ID);
                 nodeIdMapping[originalNode.ID] = newNodeId;
 
                 // 새 위치 계산
@@ -1252,7 +1252,7 @@ class UIManager {
                 if (nodeIdMapping[originalLink.FromNodeID] && nodeIdMapping[originalLink.ToNodeID]) {
                     const newFromId = nodeIdMapping[originalLink.FromNodeID];
                     const newToId = nodeIdMapping[originalLink.ToNodeID];
-                    const newLinkId = this._generateNewLinkId(newFromId, newToId);
+                    const newLinkId = this._generateNewLinkId(originalLink.ID, newFromId, newToId);
 
                     // 새 링크 길이 계산
                     const newLength = this._calculateLinkLength(
@@ -1351,21 +1351,36 @@ class UIManager {
         this.updateClipboardUI();
     }
 
-    // 새 노드 ID 생성
-    _generateNewNodeId() {
-        const existingIds = this.currentData.Node.map(node => {
-            const match = node.ID.match(/N(\d+)/);
-            return match ? parseInt(match[1]) : 0;
-        });
-        const maxId = Math.max(0, ...existingIds);
-        return `N${String(maxId + 1).padStart(4, '0')}`;
+    // 새 노드 ID 생성 (Copied_ 접두사 포함)
+    _generateNewNodeId(originalId) {
+        const baseId = `Copied_${originalId}`;
+
+        // 이미 동일한 ID가 있는지 확인하고 카운터 추가
+        let counter = 1;
+        let newId = baseId;
+
+        while (this.currentData.Node.some(node => node.ID === newId)) {
+            newId = `${baseId}_${counter}`;
+            counter++;
+        }
+
+        return newId;
     }
 
-    // 새 링크 ID 생성
-    _generateNewLinkId(fromNodeId, toNodeId) {
-        const fromNum = fromNodeId.replace('N', '');
-        const toNum = toNodeId.replace('N', '');
-        return `L${fromNum}${toNum}`;
+    // 새 링크 ID 생성 (Copied_ 접두사 포함)
+    _generateNewLinkId(originalId, fromNodeId, toNodeId) {
+        const baseId = `Copied_${originalId}`;
+
+        // 이미 동일한 ID가 있는지 확인하고 카운터 추가
+        let counter = 1;
+        let newId = baseId;
+
+        while (this.currentData.Link.some(link => link.ID === newId)) {
+            newId = `${baseId}_${counter}`;
+            counter++;
+        }
+
+        return newId;
     }
 
     // 링크 길이 계산
