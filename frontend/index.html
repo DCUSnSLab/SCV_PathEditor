@@ -67,6 +67,15 @@
                         <button id="deleteModeBtn" class="btn btn-mode">삭제 모드<br/>(미구현)</button>
                     </div>
                     <div class="mode-buttons">
+                        <p class="middle-text">편집</p>
+                        <button id="cutNodesBtn" class="btn btn-secondary" disabled>✂️ 잘라내기</button>
+                        <button id="pasteNodesBtn" class="btn btn-secondary" disabled>📍 붙여넣기 (비활성)</button>
+                        <button id="clearClipboardBtn" class="btn btn-secondary" disabled>🗑️ 클립보드 비우기</button>
+                        <div class="clipboard-status" id="clipboardStatus">
+                            📭 클립보드가 비어있습니다
+                        </div>
+                    </div>
+                    <div class="mode-buttons">
                         <p class="middle-text">구간 노드</p>
                         <div class="form-group">
                             <label for="nodeInterval">구간 간격 (m):</label>

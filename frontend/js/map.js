@@ -847,6 +847,15 @@ class PathMap {
     getSelectedNodes() {
         return this.getSelectedNodeIds().map(id => this.nodes.get(id)?.data).filter(Boolean);
     }
+
+    getMapCenter() {
+        if (!this.map) return null;
+        const center = this.map.getCenter();
+        return {
+            lat: center.lat,
+            lng: center.lng
+        };
+    }
     clearSelections() {
         // 상태만 비우는 게 아니라, 시각 스타일도 강제 원복
         if (this.selectedNode) {

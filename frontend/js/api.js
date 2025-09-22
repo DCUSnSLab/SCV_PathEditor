@@ -467,6 +467,36 @@ class PathAPI {
         });
     }
 
+    // 잘라내기/붙여넣기 관련 API
+    async cutNodes(nodeIds) {
+        return await this.request('/nodes/cut', {
+            method: 'POST',
+            body: JSON.stringify({ node_ids: nodeIds })
+        });
+    }
+
+    async pasteNodes(centerLat, centerLon) {
+        return await this.request('/nodes/paste', {
+            method: 'POST',
+            body: JSON.stringify({
+                center_lat: centerLat,
+                center_lon: centerLon
+            })
+        });
+    }
+
+    async getClipboardStatus() {
+        return await this.request('/clipboard/status', {
+            method: 'GET'
+        });
+    }
+
+    async clearClipboard() {
+        return await this.request('/clipboard', {
+            method: 'DELETE'
+        });
+    }
+
 }
 
 // 전역 API 인스턴스

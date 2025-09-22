@@ -41,6 +41,8 @@ class SCVPathEditor {
         // 노드 선택 이벤트
         this.map.onNodeSelect = (nodeId, nodeData) => {
             this.ui.updateSelectedNodeInfo(nodeId, nodeData);
+            // 선택 상태 변경 시 잘라내기 버튼 상태 업데이트
+            this.ui.updateSelectedNodeButtons();
         };
 
         // 노드 드래그 이벤트

@@ -17,7 +17,11 @@ class UIManager {
         // ★ 현재 모달이 '수정'으로 열렸는지 구분하기 위한 플래그/ID
         this.editingNodeId = null;
 
+        // 클립보드 상태 관리
+        this.clipboardStatus = { has_content: false, paste_enabled: false };
+
         this.setupEventListeners();
+        this.initializeClipboardStatus();
     }
 
     setupEventListeners() {
@@ -77,6 +81,19 @@ class UIManager {
 
         document.getElementById('batchEditBtn').addEventListener('click', () => {
             this.openBatchEditModal();
+        });
+
+        // 잘라내기/붙여넣기 버튼들
+        document.getElementById('cutNodesBtn').addEventListener('click', () => {
+            this.cutSelectedNodes();
+        });
+
+        document.getElementById('pasteNodesBtn').addEventListener('click', () => {
+            this.pasteNodes();
+        });
+
+        document.getElementById('clearClipboardBtn').addEventListener('click', () => {
+            this.clearClipboard();
         });
 
         // 지도 옵션
@@ -999,6 +1016,369 @@ class UIManager {
 
         // (옵션) 서버에도 저장하고 싶다면 저장 버튼으로 파일 저장을 호출하거나,
         // 서버에 속성 업데이트용 API가 추가되면 여기서 호출하세요. 현재 제공 API는 위치 업데이트만 있음. :contentReference[oaicite:13]{index=13}
+    }
+
+    // 클립보드 상태 초기화
+    async initializeClipboardStatus() {
+        try {
+            this.updateLocalClipboardStatus();
+            this.updateSelectedNodeButtons();
+        } catch (error) {
+            console.error('클립보드 상태 초기화 실패:', error);
+        }
+    }
+
+    // 클립보드 상태 업데이트 (서버 기반 - 현재 사용 안 함)
+    async updateClipboardStatus() {
+        try {
+            this.clipboardStatus = await pathAPI.getClipboardStatus();
+            this.updateClipboardUI();
+        } catch (error) {
+            console.error('클립보드 상태 확인 실패:', error);
+            this.clipboardStatus = { has_content: false, paste_enabled: false };
+            this.updateClipboardUI();
+        }
+    }
+
+    // 선택된 노드에 따른 버튼 상태 업데이트
+    updateSelectedNodeButtons() {
+        const selectedNodes = window.pathMap?.getSelectedNodeIds() || [];
+        const cutBtn = document.getElementById('cutNodesBtn');
+
+        if (selectedNodes.length > 0) {
+            cutBtn.disabled = false;
+            cutBtn.textContent = `✂️ 잘라내기 (${selectedNodes.length}개)`;
+        } else {
+            cutBtn.disabled = true;
+            cutBtn.textContent = '✂️ 잘라내기';
+        }
+    }
+
+    // 클립보드 UI 업데이트
+    updateClipboardUI() {
+        const pasteBtn = document.getElementById('pasteNodesBtn');
+        const clearBtn = document.getElementById('clearClipboardBtn');
+        const statusDiv = document.getElementById('clipboardStatus');
+
+        // 붙여넣기 버튼
+        pasteBtn.disabled = !this.clipboardStatus.paste_enabled;
+        pasteBtn.textContent = this.clipboardStatus.button_text || '📍 붙여넣기';
+
+        // 클립보드 비우기 버튼
+        clearBtn.disabled = !this.clipboardStatus.has_content;
+
+        // 상태 표시
+        statusDiv.textContent = this.clipboardStatus.message || '📭 클립보드가 비어있습니다';
+
+        // 클립보드 상태에 따른 CSS 클래스 변경
+        if (this.clipboardStatus.has_content) {
+            statusDiv.classList.add('has-content');
+        } else {
+            statusDiv.classList.remove('has-content');
+        }
+    }
+
+    // 선택된 노드들 잘라내기
+    async cutSelectedNodes() {
+        const selectedNodes = window.pathMap?.getSelectedNodeIds() || [];
+
+        if (selectedNodes.length === 0) {
+            showNotification('잘라낼 노드를 선택해주세요', 'warning');
+            return;
+        }
+
+        // 선택된 노드들이 실제로 존재하는지 확인
+        const existingNodes = selectedNodes.filter(nodeId =>
+            this.currentData.Node.some(node => node.ID === nodeId)
+        );
+
+        if (existingNodes.length === 0) {
+            showNotification('선택된 노드가 현재 데이터에 없습니다', 'error');
+            return;
+        }
+
+        if (existingNodes.length !== selectedNodes.length) {
+            showNotification(`일부 노드가 현재 데이터에 없습니다. ${existingNodes.length}개 노드만 잘라냅니다.`, 'warning');
+        }
+
+        try {
+            showLoading('노드를 잘라내는 중...');
+
+            // 잘라낼 노드들과 관련된 링크들 찾기
+            const cutNodes = this.currentData.Node.filter(node =>
+                existingNodes.includes(node.ID)
+            );
+            const cutLinks = this.currentData.Link.filter(link =>
+                existingNodes.includes(link.FromNodeID) || existingNodes.includes(link.ToNodeID)
+            );
+
+            // 클립보드에 저장 (로컬 스토리지 활용)
+            const clipboardData = {
+                nodes: cutNodes,
+                links: cutLinks,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('pathEditor_clipboard', JSON.stringify(clipboardData));
+
+            // 현재 데이터에서 제거
+            this.currentData.Node = this.currentData.Node.filter(node =>
+                !existingNodes.includes(node.ID)
+            );
+            this.currentData.Link = this.currentData.Link.filter(link =>
+                !existingNodes.includes(link.FromNodeID) && !existingNodes.includes(link.ToNodeID)
+            );
+
+            // UI 업데이트
+            this.updateTables();
+            this.updateMap();
+
+            // 선택 해제
+            if (window.pathMap) {
+                window.pathMap.clearSelections();
+            }
+
+            // 클립보드 상태 업데이트 (로컬)
+            this.clipboardStatus = {
+                has_content: true,
+                paste_enabled: true,
+                button_text: `📍 붙여넣기 (${cutNodes.length}개 노드)`,
+                message: `🗂️ 클립보드에 ${cutNodes.length}개 노드, ${cutLinks.length}개 링크가 저장되어 있습니다`,
+                node_count: cutNodes.length,
+                link_count: cutLinks.length
+            };
+            this.updateClipboardUI();
+            this.updateSelectedNodeButtons();
+
+            showNotification(`✂️ ${cutNodes.length}개 노드와 ${cutLinks.length}개 링크를 잘라냈습니다.\n🗂️ 클립보드에 저장되었습니다. 붙여넣기 버튼을 눌러 원하는 위치에 배치하세요.`, 'success');
+
+        } catch (error) {
+            console.error('잘라내기 처리 중 오류:', error);
+            showNotification('잘라내기 중 오류가 발생했습니다', 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // 노드들 붙여넣기
+    async pasteNodes() {
+        // 로컬 스토리지에서 클립보드 데이터 확인
+        const clipboardDataStr = localStorage.getItem('pathEditor_clipboard');
+        if (!clipboardDataStr) {
+            showNotification('클립보드가 비어있습니다', 'warning');
+            return;
+        }
+
+        let clipboardData;
+        try {
+            clipboardData = JSON.parse(clipboardDataStr);
+        } catch (error) {
+            showNotification('클립보드 데이터가 손상되었습니다', 'error');
+            localStorage.removeItem('pathEditor_clipboard');
+            this.updateLocalClipboardStatus();
+            return;
+        }
+
+        if (!clipboardData.nodes || clipboardData.nodes.length === 0) {
+            showNotification('클립보드에 붙여넣을 노드가 없습니다', 'warning');
+            return;
+        }
+
+        // 지도 중심 좌표 가져오기
+        const mapCenter = window.pathMap?.getMapCenter();
+        if (!mapCenter) {
+            showNotification('지도 중심 좌표를 가져올 수 없습니다', 'error');
+            return;
+        }
+
+        try {
+            showLoading('노드를 붙여넣는 중...');
+
+            // 원본 노드들의 중심점 계산
+            const originalNodes = clipboardData.nodes;
+            const originalCenterLat = originalNodes.reduce((sum, node) => sum + node.GpsInfo.Lat, 0) / originalNodes.length;
+            const originalCenterLon = originalNodes.reduce((sum, node) => sum + node.GpsInfo.Long, 0) / originalNodes.length;
+
+            // 이동 오프셋 계산
+            const latOffset = mapCenter.lat - originalCenterLat;
+            const lonOffset = mapCenter.lng - originalCenterLon;
+
+            // 새로운 노드 ID 매핑 생성
+            const nodeIdMapping = {};
+            const pastedNodes = [];
+
+            // 노드들 복사 및 새 ID 생성
+            for (const originalNode of originalNodes) {
+                const newNodeId = this._generateNewNodeId();
+                nodeIdMapping[originalNode.ID] = newNodeId;
+
+                // 새 위치 계산
+                const newLat = originalNode.GpsInfo.Lat + latOffset;
+                const newLon = originalNode.GpsInfo.Long + lonOffset;
+
+                // UTM 좌표 변환
+                let newUtmInfo;
+                try {
+                    const utmData = await pathAPI.latLngToUtm(newLat, newLon);
+                    newUtmInfo = {
+                        Easting: Math.round(utmData.easting * 100) / 100,
+                        Northing: Math.round(utmData.northing * 100) / 100,
+                        Zone: "52N"
+                    };
+                } catch (error) {
+                    console.warn('UTM 변환 실패, 기본값 사용:', error);
+                    newUtmInfo = { ...originalNode.UtmInfo };
+                }
+
+                // 새 노드 생성
+                const newNode = {
+                    ...originalNode,
+                    ID: newNodeId,
+                    GpsInfo: {
+                        Lat: newLat,
+                        Long: newLon,
+                        Alt: originalNode.GpsInfo.Alt
+                    },
+                    UtmInfo: newUtmInfo,
+                    UpdateDate: new Date().toISOString().slice(0, 10).replace(/-/g, ''),
+                    HistRemark: "붙여넣기로 생성"
+                };
+
+                pastedNodes.push(newNode);
+            }
+
+            // 링크들 복사 (양쪽 노드가 모두 붙여넣은 노드인 경우만)
+            const pastedLinks = [];
+            for (const originalLink of clipboardData.links) {
+                if (nodeIdMapping[originalLink.FromNodeID] && nodeIdMapping[originalLink.ToNodeID]) {
+                    const newFromId = nodeIdMapping[originalLink.FromNodeID];
+                    const newToId = nodeIdMapping[originalLink.ToNodeID];
+                    const newLinkId = this._generateNewLinkId(newFromId, newToId);
+
+                    // 새 링크 길이 계산
+                    const newLength = this._calculateLinkLength(
+                        pastedNodes.find(n => n.ID === newFromId),
+                        pastedNodes.find(n => n.ID === newToId)
+                    );
+
+                    const newLink = {
+                        ...originalLink,
+                        ID: newLinkId,
+                        FromNodeID: newFromId,
+                        ToNodeID: newToId,
+                        Length: newLength,
+                        UpdateDate: new Date().toISOString().slice(0, 10).replace(/-/g, ''),
+                        HistRemark: "붙여넣기로 생성"
+                    };
+
+                    pastedLinks.push(newLink);
+                }
+            }
+
+            // 현재 데이터에 추가
+            this.currentData.Node.push(...pastedNodes);
+            this.currentData.Link.push(...pastedLinks);
+
+            // UI 업데이트
+            this.updateTables();
+            this.updateMap();
+
+            showNotification(`📍 ${pastedNodes.length}개 노드와 ${pastedLinks.length}개 링크를 붙여넣었습니다.\n📍 새 위치: ${mapCenter.lat.toFixed(6)}, ${mapCenter.lng.toFixed(6)}`, 'success');
+
+        } catch (error) {
+            console.error('붙여넣기 처리 중 오류:', error);
+            showNotification('붙여넣기 중 오류가 발생했습니다', 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // 클립보드 비우기
+    async clearClipboard() {
+        try {
+            showLoading('클립보드를 비우는 중...');
+
+            const hadContent = localStorage.getItem('pathEditor_clipboard') !== null;
+            localStorage.removeItem('pathEditor_clipboard');
+
+            // 클립보드 상태 업데이트
+            this.updateLocalClipboardStatus();
+
+            const message = hadContent ? '🗑️ 클립보드를 비웠습니다' : '📭 클립보드가 이미 비어있습니다';
+            showNotification(message, 'success');
+
+        } catch (error) {
+            console.error('클립보드 삭제 중 오류:', error);
+            showNotification('클립보드 삭제 중 오류가 발생했습니다', 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // 로컬 클립보드 상태 업데이트
+    updateLocalClipboardStatus() {
+        const clipboardDataStr = localStorage.getItem('pathEditor_clipboard');
+
+        if (clipboardDataStr) {
+            try {
+                const clipboardData = JSON.parse(clipboardDataStr);
+                const nodeCount = clipboardData.nodes?.length || 0;
+                const linkCount = clipboardData.links?.length || 0;
+
+                this.clipboardStatus = {
+                    has_content: true,
+                    paste_enabled: nodeCount > 0,
+                    button_text: `📍 붙여넣기 (${nodeCount}개 노드)`,
+                    message: `🗂️ 클립보드에 ${nodeCount}개 노드, ${linkCount}개 링크가 저장되어 있습니다`,
+                    node_count: nodeCount,
+                    link_count: linkCount
+                };
+            } catch (error) {
+                console.error('클립보드 데이터 파싱 오류:', error);
+                localStorage.removeItem('pathEditor_clipboard');
+                this.clipboardStatus = { has_content: false, paste_enabled: false };
+            }
+        } else {
+            this.clipboardStatus = {
+                has_content: false,
+                paste_enabled: false,
+                button_text: '📍 붙여넣기 (비활성)',
+                message: '📭 클립보드가 비어있습니다',
+                node_count: 0,
+                link_count: 0
+            };
+        }
+
+        this.updateClipboardUI();
+    }
+
+    // 새 노드 ID 생성
+    _generateNewNodeId() {
+        const existingIds = this.currentData.Node.map(node => {
+            const match = node.ID.match(/N(\d+)/);
+            return match ? parseInt(match[1]) : 0;
+        });
+        const maxId = Math.max(0, ...existingIds);
+        return `N${String(maxId + 1).padStart(4, '0')}`;
+    }
+
+    // 새 링크 ID 생성
+    _generateNewLinkId(fromNodeId, toNodeId) {
+        const fromNum = fromNodeId.replace('N', '');
+        const toNum = toNodeId.replace('N', '');
+        return `L${fromNum}${toNum}`;
+    }
+
+    // 링크 길이 계산
+    _calculateLinkLength(fromNode, toNode) {
+        if (!fromNode || !toNode) return 0.0;
+
+        const ex1 = fromNode.UtmInfo.Easting;
+        const ny1 = fromNode.UtmInfo.Northing;
+        const ex2 = toNode.UtmInfo.Easting;
+        const ny2 = toNode.UtmInfo.Northing;
+
+        const distM = Math.sqrt((ex1 - ex2) ** 2 + (ny1 - ny2) ** 2);
+        return Math.round(distM / 10) / 100; // km 단위, 소수점 2자리
     }
 
 

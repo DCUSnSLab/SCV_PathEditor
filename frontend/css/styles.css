@@ -237,6 +237,37 @@ details > div {
     background-color: #c0392b;
 }
 
+/* 클립보드 상태 표시 */
+.clipboard-status {
+    font-size: 0.85em;
+    color: #666;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-top: 8px;
+    text-align: center;
+    border-left: 4px solid #6c757d;
+}
+
+.clipboard-status.has-content {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+    border-left-color: #28a745;
+}
+
+/* 잘라내기/붙여넣기 버튼 추가 스타일 */
+.btn-secondary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-secondary:disabled:hover {
+    background-color: #6c757d;
+    transform: none;
+}
+
 #editBtn {
     margin-top: 10px;
     width: 100%;
