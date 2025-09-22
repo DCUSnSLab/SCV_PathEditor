@@ -27,6 +27,12 @@ class PathMap {
         this.draggedNodeId = null;
         this.dragUpdateTimeout = null;
 
+        // 드래그 선택 관련 변수들
+        this.isSelectionDragging = false;
+        this.selectionStartPoint = null;
+        this.selectionRectangle = null;
+        this.selectionStartLatLng = null;
+
         this.showNodeIds = true; // 노드 ID 표시 여부 플래그
         
         this.initMap();
@@ -183,10 +189,22 @@ class PathMap {
         this.showNodeIds = visible;
         this.nodes.forEach(nodeInfo => {
             const marker = nodeInfo.marker;
+            const nodeId = nodeInfo.data.ID;
+
+            // 기존 tooltip 제거 후 새로 생성
+            marker.unbindTooltip();
+
+            const label = L.tooltip({
+                permanent: visible,
+                direction: 'top',
+                offset: [0, -10],
+                className: 'node-label'
+            }).setContent(nodeId);
+
+            marker.bindTooltip(label);
+
             if (visible) {
                 marker.openTooltip();
-            } else {
-                marker.closeTooltip();
             }
         });
     }
@@ -236,6 +254,10 @@ class PathMap {
         });
 
         // 전역 마우스 이벤트 (드래그용)
+        this.map.on('mousedown', (e) => {
+            this.handleGlobalMouseDown(e);
+        });
+
         this.map.on('mousemove', (e) => {
             this.handleGlobalMouseMove(e);
         });
@@ -243,6 +265,9 @@ class PathMap {
         this.map.on('mouseup', (e) => {
             this.handleGlobalMouseUp(e);
         });
+
+        // 키보드 이벤트 리스너 (Ctrl 키 감지용)
+        this.setupKeyboardListeners();
     }
 
     handleMapClick(e) {
@@ -426,7 +451,7 @@ class PathMap {
 
         // 라벨 추가
         const label = L.tooltip({
-            permanent: true,
+            permanent: this.showNodeIds, // showNodeIds 상태에 따라 permanent 설정
             direction: 'top',
             offset: [0, -10],
             className: 'node-label'
@@ -750,7 +775,15 @@ class PathMap {
         }
     }
 
+    handleGlobalMouseDown(e) {
+        // 복수 선택 모드에서 드래그 선택 시작
+        if (this.mode === 'select' && e.originalEvent.target === this.map.getContainer()) {
+            this.startSelectionDrag(e);
+        }
+    }
+
     handleGlobalMouseMove(e) {
+        // 노드 드래그 처리
         if (this.isDragging && this.draggedMarker && this.mode === 'drag') {
             // 마커 위치는 즉시 업데이트
             this.draggedMarker.setLatLng(e.latlng);
@@ -758,21 +791,32 @@ class PathMap {
             this.updateHeadingPosition(this.draggedNodeId);
 
             if (this.draggedNodeId) this.updateHeadingPosition(this.draggedNodeId);
-            
+
             // 링크 업데이트는 쓰로틀링 적용 (성능 개선)
             if (this.dragUpdateTimeout) {
                 clearTimeout(this.dragUpdateTimeout);
             }
-            
+
             this.dragUpdateTimeout = setTimeout(() => {
                 if (this.isDragging && this.draggedNodeId) {
                     this.updateNodeLinks(this.draggedNodeId);
                 }
             }, 50); // 50ms마다 한 번씩만 링크 업데이트
         }
+
+        // 드래그 선택 처리
+        if (this.isSelectionDragging) {
+            this.updateSelectionDrag(e);
+        }
     }
 
     handleGlobalMouseUp(e) {
+        // 드래그 선택 종료 처리
+        if (this.isSelectionDragging) {
+            this.endSelectionDrag(e);
+            return;
+        }
+
         if (this.isDragging && this.draggedMarker) {
             console.log('Ending drag for node:', this.draggedNodeId);
             
@@ -1098,5 +1142,193 @@ class PathMap {
 // 전 노드 새로고침
     refreshAllNodeAppearances() {
         this.nodes.forEach((_, id) => this.refreshNodeAppearance(id));
+    }
+
+    // 드래그 선택 시작
+    startSelectionDrag(e) {
+        // 노드나 마커를 클릭한 경우는 선택 드래그를 시작하지 않음
+        if (e.originalEvent.target.closest('.leaflet-marker-icon')) {
+            return;
+        }
+
+        this.isSelectionDragging = true;
+        this.selectionStartLatLng = e.latlng;
+        this.selectionStartPoint = this.map.latLngToContainerPoint(e.latlng);
+
+        // 지도 드래그 비활성화
+        this.map.dragging.disable();
+
+        // 선택 사각형 생성
+        this.createSelectionRectangle();
+
+        // 이벤트 전파 방지
+        L.DomEvent.stopPropagation(e.originalEvent);
+        L.DomEvent.preventDefault(e.originalEvent);
+    }
+
+    // 드래그 선택 업데이트
+    updateSelectionDrag(e) {
+        if (!this.isSelectionDragging || !this.selectionStartLatLng) {
+            return;
+        }
+
+        const currentPoint = this.map.latLngToContainerPoint(e.latlng);
+        const startPoint = this.selectionStartPoint;
+
+        // 선택 사각형 업데이트
+        const bounds = L.latLngBounds([
+            this.selectionStartLatLng,
+            e.latlng
+        ]);
+
+        if (this.selectionRectangle) {
+            this.selectionRectangle.setBounds(bounds);
+        }
+
+        // 실시간으로 선택 범위 내 노드들 하이라이트
+        this.highlightNodesInBounds(bounds);
+    }
+
+    // 드래그 선택 종료
+    endSelectionDrag(e) {
+        if (!this.isSelectionDragging) {
+            return;
+        }
+
+        const bounds = L.latLngBounds([
+            this.selectionStartLatLng,
+            e.latlng
+        ]);
+
+        // 선택 범위 내 노드들 실제 선택
+        this.selectNodesInBounds(bounds);
+
+        // 정리
+        this.cleanupSelectionDrag();
+    }
+
+    // 선택 사각형 생성
+    createSelectionRectangle() {
+        if (this.selectionRectangle) {
+            this.map.removeLayer(this.selectionRectangle);
+        }
+
+        this.selectionRectangle = L.rectangle(
+            L.latLngBounds([this.selectionStartLatLng, this.selectionStartLatLng]),
+            {
+                color: '#3498db',
+                weight: 2,
+                fillColor: '#3498db',
+                fillOpacity: 0.1,
+                dashArray: '5, 5'
+            }
+        ).addTo(this.map);
+    }
+
+    // 범위 내 노드들 하이라이트
+    highlightNodesInBounds(bounds) {
+        this.nodes.forEach((nodeInfo, nodeId) => {
+            const nodeLatLng = nodeInfo.marker.getLatLng();
+            const isInBounds = bounds.contains(nodeLatLng);
+
+            // 임시 하이라이트 스타일 적용
+            const element = nodeInfo.marker.getElement();
+            if (element) {
+                if (isInBounds) {
+                    element.style.border = '3px solid #e74c3c';
+                    element.style.boxShadow = '0 0 10px rgba(231, 76, 60, 0.5)';
+                } else {
+                    // 원래 스타일로 복원 (기존 선택된 것은 유지)
+                    if (this.selectedNodes.has(nodeId)) {
+                        element.style.border = '3px solid #e74c3c';
+                        element.style.boxShadow = '0 0 10px rgba(231, 76, 60, 0.8)';
+                    } else {
+                        element.style.border = '2px solid white';
+                        element.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+                    }
+                }
+            }
+        });
+    }
+
+    // 범위 내 노드들 선택
+    selectNodesInBounds(bounds) {
+        // 기존 선택 해제 (Ctrl 키가 눌리지 않은 경우)
+        if (!this.isCtrlPressed) {
+            this.clearSelections();
+        }
+
+        let selectedCount = 0;
+        this.nodes.forEach((nodeInfo, nodeId) => {
+            const nodeLatLng = nodeInfo.marker.getLatLng();
+            if (bounds.contains(nodeLatLng)) {
+                this.selectedNodes.add(nodeId);
+                selectedCount++;
+            }
+        });
+
+        // 모든 노드 외형 새로고침
+        this.refreshAllNodeAppearances();
+
+        // 선택 콜백 호출
+        if (this.onNodeSelect) {
+            if (this.selectedNodes.size >= 2) {
+                this.onNodeSelect(null, null);
+            } else if (this.selectedNodes.size === 1) {
+                const id = [...this.selectedNodes][0];
+                const nd = this.nodes.get(id)?.data || null;
+                this.onNodeSelect(id, nd);
+            } else {
+                this.onNodeSelect(null, null);
+            }
+        }
+
+        // 알림 표시
+        if (selectedCount > 0) {
+            showNotification(`${selectedCount}개 노드가 선택되었습니다`, 'info');
+        }
+    }
+
+    // 드래그 선택 정리
+    cleanupSelectionDrag() {
+        this.isSelectionDragging = false;
+        this.selectionStartPoint = null;
+        this.selectionStartLatLng = null;
+
+        // 선택 사각형 제거
+        if (this.selectionRectangle) {
+            this.map.removeLayer(this.selectionRectangle);
+            this.selectionRectangle = null;
+        }
+
+        // 지도 드래그 재활성화
+        this.map.dragging.enable();
+    }
+
+    // Ctrl 키 상태 감지 (다중 선택용)
+    get isCtrlPressed() {
+        return this.ctrlPressed || false;
+    }
+
+    // 키보드 이벤트 리스너 설정
+    setupKeyboardListeners() {
+        this.ctrlPressed = false;
+
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                this.ctrlPressed = true;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (!e.ctrlKey && !e.metaKey) {
+                this.ctrlPressed = false;
+            }
+        });
+
+        // 윈도우 포커스가 벗어났을 때 Ctrl 상태 초기화
+        window.addEventListener('blur', () => {
+            this.ctrlPressed = false;
+        });
     }
 }

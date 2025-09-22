@@ -13,6 +13,7 @@ class UIManager {
         });
         
         this.currentData = { Node: [], Link: [] };
+        this.currentFilename = null; // 현재 로드된 파일명 저장
 
         // ★ 현재 모달이 '수정'으로 열렸는지 구분하기 위한 플래그/ID
         this.editingNodeId = null;
@@ -239,12 +240,13 @@ class UIManager {
         try {
             showLoading();
             const pathData = await pathAPI.loadPathData(filename);
-            
+
             this.currentData = pathData;
             this.currentData.Node = this.normalizeAllNodes(this.currentData.Node);
+            this.currentFilename = filename; // 로드된 파일명 저장
             this.updateTables();
             this.updateMap();
-            
+
             showNotification(`${filename} 파일이 로드되었습니다`, 'success');
             
         } catch (error) {
@@ -285,10 +287,17 @@ class UIManager {
     showSaveModal() {
         const saveFilename = document.getElementById('saveFilename');
 
-        // 현재 시간을 기반으로 기본 파일명 생성
-        const now = new Date();
-        const timestamp = now.toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_');
-        saveFilename.value = `path_${timestamp}.json`;
+        // 현재 로드된 파일명이 있으면 사용, 없으면 기본 파일명 생성
+        if (this.currentFilename) {
+            // 경로에서 파일명만 추출
+            const filename = this.currentFilename.split('/').pop();
+            saveFilename.value = filename;
+        } else {
+            // 현재 시간을 기반으로 기본 파일명 생성
+            const now = new Date();
+            const timestamp = now.toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_');
+            saveFilename.value = `path_${timestamp}.json`;
+        }
 
         this.showModal('saveModal');
     }
@@ -1351,32 +1360,28 @@ class UIManager {
         this.updateClipboardUI();
     }
 
-    // 새 노드 ID 생성 (Copied_ 접두사 포함)
+    // 새 노드 ID 생성
     _generateNewNodeId(originalId) {
-        const baseId = `Copied_${originalId}`;
+        let newId = originalId;
+        let counter = 1;
 
         // 이미 동일한 ID가 있는지 확인하고 카운터 추가
-        let counter = 1;
-        let newId = baseId;
-
         while (this.currentData.Node.some(node => node.ID === newId)) {
-            newId = `${baseId}_${counter}`;
+            newId = `${originalId}_${counter}`;
             counter++;
         }
 
         return newId;
     }
 
-    // 새 링크 ID 생성 (Copied_ 접두사 포함)
+    // 새 링크 ID 생성
     _generateNewLinkId(originalId, fromNodeId, toNodeId) {
-        const baseId = `Copied_${originalId}`;
+        let newId = originalId;
+        let counter = 1;
 
         // 이미 동일한 ID가 있는지 확인하고 카운터 추가
-        let counter = 1;
-        let newId = baseId;
-
         while (this.currentData.Link.some(link => link.ID === newId)) {
-            newId = `${baseId}_${counter}`;
+            newId = `${originalId}_${counter}`;
             counter++;
         }
 
