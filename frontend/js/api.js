@@ -34,12 +34,15 @@ class PathAPI {
         }
     }
 
-// 캐시 방지용 쿼리와 fetch 옵션을 추가
     async listFiles() {
         return await this.request(`/files?_=${Date.now()}`, {
             method: 'GET',
             cache: 'no-store',
-            headers: {'Cache-Control': 'no-cache'}
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
         });
     }
 
@@ -70,10 +73,214 @@ class PathAPI {
 
 
     async savePathData(filename, pathData) {
-        return await this.request(`/save/${filename}`, {
-            method: 'POST',
-            body: JSON.stringify(pathData)
+        // 파일명 검증
+        if (!filename || typeof filename !== 'string') {
+            throw new Error('유효한 파일명을 입력해주세요');
+        }
+
+        if (!filename.toLowerCase().endsWith('.json')) {
+            throw new Error('파일명은 .json 확장자여야 합니다');
+        }
+
+        // 데이터 검증
+        if (!pathData || typeof pathData !== 'object') {
+            throw new Error('저장할 데이터가 유효하지 않습니다');
+        }
+
+        if (!Array.isArray(pathData.Node) || !Array.isArray(pathData.Link)) {
+            throw new Error('Node와 Link 배열이 필요합니다');
+        }
+
+        // GPS 좌표 기준으로 모든 UTM 좌표 재계산 (52N 고정)
+        await this.recalculateAllUTM(pathData);
+
+        try {
+            // JSON 직렬화 가능성 사전 검증
+            JSON.stringify(pathData);
+
+            return await this.request(`/save/${encodeURIComponent(filename)}`, {
+                method: 'POST',
+                body: JSON.stringify(pathData),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+        } catch (error) {
+            if (error instanceof TypeError && error.message.includes('JSON')) {
+                throw new Error('데이터를 JSON으로 변환할 수 없습니다');
+            }
+            throw error;
+        }
+    }
+
+    // UTM 좌표 검증 함수
+    validateUTMData(pathData) {
+        const errors = [];
+        const warnings = [];
+        const zones = new Set();
+        const hemispheres = new Set();
+
+        // 노드별 UTM 검증
+        pathData.Node.forEach((node, index) => {
+            const nodeId = node.ID || `Node[${index}]`;
+
+            // UTM 정보 존재 확인
+            if (!node.UtmInfo) {
+                errors.push(`${nodeId}: UTM 정보가 없습니다`);
+                return;
+            }
+
+            const { Easting, Northing, Zone } = node.UtmInfo;
+
+            // 필수 필드 확인
+            if (typeof Easting !== 'number' || typeof Northing !== 'number') {
+                errors.push(`${nodeId}: UTM Easting/Northing이 숫자가 아닙니다`);
+                return;
+            }
+
+            if (!Zone || typeof Zone !== 'string') {
+                errors.push(`${nodeId}: UTM Zone이 유효하지 않습니다`);
+                return;
+            }
+
+            // Zone 형식 검증 (예: "52N", "52S")
+            const zoneMatch = Zone.match(/^(\d{1,2})([NS])$/);
+            if (!zoneMatch) {
+                errors.push(`${nodeId}: UTM Zone 형식이 잘못되었습니다 (${Zone})`);
+                return;
+            }
+
+            const zoneNumber = parseInt(zoneMatch[1]);
+            const hemisphere = zoneMatch[2];
+
+            // Zone 번호 범위 확인 (1-60)
+            if (zoneNumber < 1 || zoneNumber > 60) {
+                errors.push(`${nodeId}: UTM Zone 번호가 범위를 벗어났습니다 (${zoneNumber})`);
+            }
+
+            // Easting 범위 확인 (100,000 ~ 900,000)
+            if (Easting < 100000 || Easting > 900000) {
+                warnings.push(`${nodeId}: UTM Easting이 일반적인 범위를 벗어났습니다 (${Easting})`);
+            }
+
+            // Northing 범위 확인 (남반구: 0~10,000,000, 북반구: 0~9,000,000)
+            const maxNorthing = hemisphere === 'S' ? 10000000 : 9000000;
+            if (Northing < 0 || Northing > maxNorthing) {
+                warnings.push(`${nodeId}: UTM Northing이 범위를 벗어났습니다 (${Northing})`);
+            }
+
+            // GPS 좌표와 UTM 좌표 일관성 확인
+            if (node.GpsInfo && node.GpsInfo.Lat && node.GpsInfo.Long) {
+                const lat = node.GpsInfo.Lat;
+                const expectedHemisphere = lat >= 0 ? 'N' : 'S';
+
+                if (hemisphere !== expectedHemisphere) {
+                    errors.push(`${nodeId}: GPS 위도(${lat})와 UTM 반구(${hemisphere})가 일치하지 않습니다`);
+                }
+            }
+
+            zones.add(Zone);
+            hemispheres.add(hemisphere);
         });
+
+        // 전체 데이터 일관성 검증
+        if (zones.size > 1) {
+            warnings.push(`여러 UTM Zone이 혼재되어 있습니다: ${Array.from(zones).join(', ')}`);
+        }
+
+        if (hemispheres.size > 1) {
+            errors.push(`북반구와 남반구 좌표가 혼재되어 있습니다: ${Array.from(hemispheres).join(', ')}`);
+        }
+
+        // 좌표 클러스터링 검증 (너무 멀리 떨어진 좌표들 확인)
+        const eastings = pathData.Node.map(n => n.UtmInfo?.Easting).filter(e => typeof e === 'number');
+        const northings = pathData.Node.map(n => n.UtmInfo?.Northing).filter(n => typeof n === 'number');
+
+        if (eastings.length > 1) {
+            const eastingRange = Math.max(...eastings) - Math.min(...eastings);
+            const northingRange = Math.max(...northings) - Math.min(...northings);
+
+            // 100km 이상 떨어진 좌표가 있으면 경고
+            if (eastingRange > 100000 || northingRange > 100000) {
+                warnings.push(`노드들이 매우 넓은 지역에 분산되어 있습니다 (E: ${(eastingRange/1000).toFixed(1)}km, N: ${(northingRange/1000).toFixed(1)}km)`);
+            }
+        }
+
+        // 링크 검증
+        pathData.Link.forEach((link, index) => {
+            const linkId = link.ID || `Link[${index}]`;
+
+            if (typeof link.Length !== 'number' || link.Length < 0) {
+                warnings.push(`${linkId}: 링크 길이가 유효하지 않습니다 (${link.Length})`);
+            }
+
+            // 극도로 짧은 링크 확인 (1cm 미만)
+            if (typeof link.Length === 'number' && link.Length < 0.01) {
+                warnings.push(`${linkId}: 링크가 매우 짧습니다 (${(link.Length * 1000).toFixed(1)}mm)`);
+            }
+
+            // 극도로 긴 링크 확인 (10km 이상)
+            if (typeof link.Length === 'number' && link.Length > 10000) {
+                warnings.push(`${linkId}: 링크가 매우 깁니다 (${(link.Length/1000).toFixed(1)}km)`);
+            }
+        });
+
+        return {
+            isValid: errors.length === 0,
+            errors: errors,
+            warnings: warnings,
+            stats: {
+                zones: Array.from(zones),
+                hemispheres: Array.from(hemispheres),
+                nodeCount: pathData.Node.length,
+                linkCount: pathData.Link.length
+            }
+        };
+    }
+
+    // GPS 좌표 기준으로 모든 UTM 좌표 재계산 (52N 고정)
+    async recalculateAllUTM(pathData) {
+        console.log('GPS 기준으로 UTM 좌표 재계산 시작...');
+        let recalculatedCount = 0;
+
+        for (let i = 0; i < pathData.Node.length; i++) {
+            const node = pathData.Node[i];
+
+            if (!node.GpsInfo || typeof node.GpsInfo.Lat !== 'number' || typeof node.GpsInfo.Long !== 'number') {
+                console.warn(`${node.ID || `Node[${i}]`}: GPS 좌표가 유효하지 않음, UTM 재계산 건너뜀`);
+                continue;
+            }
+
+            const { Lat, Long } = node.GpsInfo;
+
+            try {
+                // UTM 좌표 재계산 (서버 API 사용)
+                const utmData = await this.latLngToUtm(Lat, Long);
+
+                // UTM 정보 업데이트 (52N으로 강제 설정)
+                node.UtmInfo = {
+                    Easting: Math.round(utmData.easting * 100) / 100,  // 소수점 2자리
+                    Northing: Math.round(utmData.northing * 100) / 100,
+                    Zone: "52N"  // 강제로 52N 설정
+                };
+
+                recalculatedCount++;
+                console.log(`${node.ID}: UTM 재계산 완료 (E: ${node.UtmInfo.Easting}, N: ${node.UtmInfo.Northing})`);
+
+            } catch (error) {
+                console.error(`${node.ID || `Node[${i}]`}: UTM 재계산 실패 -`, error);
+
+                // 실패 시 기본값 설정
+                node.UtmInfo = {
+                    Easting: 0,
+                    Northing: 0,
+                    Zone: "52N"
+                };
+            }
+        }
+
+        console.log(`UTM 재계산 완료: ${recalculatedCount}/${pathData.Node.length}개 노드`);
+        return recalculatedCount;
     }
 
     async getCurrentData() {
@@ -91,21 +298,48 @@ class PathAPI {
         });
     }
 
-    async downloadFile(filename) {
-        // 범용 request 헬퍼가 JSON을 자동 파싱하는 문제를 피하기 위해 fetch를 직접 사용합니다.
+    async downloadFile(filepath) {
+        // 경로를 올바르게 인코딩하여 전송
         try {
-            const response = await fetch(`${this.baseUrl}/download/${filename}`);
-            
+            const encodedPath = encodeURIComponent(filepath);
+            const response = await fetch(`${this.baseUrl}/download?path=${encodedPath}`, {
+                method: 'GET',
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
+            });
+
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
+                let errorMessage = `HTTP ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.detail || errorMessage;
+                } catch {
+                    errorMessage = await response.text() || errorMessage;
+                }
+                throw new Error(errorMessage);
             }
-            
-            // ui.js가 처리할 수 있도록 blob 객체를 직접 반환합니다.
-            return await response.blob();
+
+            // 파일 크기 체크
+            const contentLength = response.headers.get('content-length');
+            if (contentLength && parseInt(contentLength) > 50 * 1024 * 1024) { // 50MB 제한
+                throw new Error('파일이 너무 큽니다 (최대 50MB)');
+            }
+
+            const blob = await response.blob();
+
+            // 빈 파일 체크
+            if (blob.size === 0) {
+                throw new Error('파일이 비어있습니다');
+            }
+
+            return blob;
 
         } catch (error) {
-            console.error('API request failed:', error);
+            console.error('Download failed:', error);
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                throw new Error('네트워크 연결을 확인해주세요');
+            }
             throw error;
         }
     }
@@ -216,7 +450,11 @@ class PathAPI {
         const res = await this.request(`/files/dirs?_=${Date.now()}`, {
             method: 'GET',
             cache: 'no-store',
-            headers: { 'Cache-Control': 'no-cache' }
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
         });
         // 방탄: 배열/객체 모두 허용
         return Array.isArray(res) ? res : (res?.directories ?? []);
@@ -248,64 +486,313 @@ function handleAPIError(error, defaultMessage = 'API 요청 중 오류가 발생
     return null;
 }
 
-// 알림 메시지 표시 함수
-function showNotification(message, type = 'info') {
-    // 기존 알림 제거
-    const existingNotification = document.querySelector('.notification');
-    if (existingNotification) {
-        existingNotification.remove();
-    }
+// 개선된 알림 메시지 시스템
+function showNotification(message, type = 'info', duration = null) {
+    // 기존 같은 타입의 알림 제거
+    const existingNotifications = document.querySelectorAll(`.notification-${type}`);
+    existingNotifications.forEach(notification => {
+        notification.remove();
+    });
 
     // 새 알림 생성
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
-    notification.textContent = message;
-    
+
+    // 아이콘 추가
+    const icons = {
+        info: '📘',
+        success: '✅',
+        warning: '⚠️',
+        error: '❌'
+    };
+
+    const icon = document.createElement('span');
+    icon.className = 'notification-icon';
+    icon.textContent = icons[type] || icons.info;
+
+    const messageSpan = document.createElement('span');
+    messageSpan.textContent = message;
+
+    // 닫기 버튼 추가
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '×';
+    closeBtn.className = 'notification-close';
+    closeBtn.style.cssText = `
+        background: none;
+        border: none;
+        color: white;
+        font-size: 18px;
+        cursor: pointer;
+        margin-left: 10px;
+        padding: 0;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+
+    closeBtn.onclick = () => notification.remove();
+
+    notification.appendChild(icon);
+    notification.appendChild(messageSpan);
+    notification.appendChild(closeBtn);
+
     // 스타일 적용
     Object.assign(notification.style, {
         position: 'fixed',
         top: '20px',
         right: '20px',
-        padding: '12px 20px',
-        borderRadius: '4px',
+        padding: '12px 16px',
+        borderRadius: '8px',
         color: 'white',
         fontWeight: '500',
         zIndex: '10000',
-        maxWidth: '400px',
-        wordWrap: 'break-word'
+        maxWidth: '450px',
+        wordWrap: 'break-word',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        fontSize: '14px',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        animation: 'slideInRight 0.3s ease-out'
     });
 
-    // 타입별 배경색
+    // 타입별 배경색 및 테두리
     const colors = {
-        info: '#3498db',
-        success: '#27ae60',
-        warning: '#f39c12',
-        error: '#e74c3c'
+        info: { bg: '#3498db', border: '#2980b9' },
+        success: { bg: '#27ae60', border: '#229954' },
+        warning: { bg: '#f39c12', border: '#e67e22' },
+        error: { bg: '#e74c3c', border: '#c0392b' }
     };
-    notification.style.backgroundColor = colors[type] || colors.info;
+
+    const colorScheme = colors[type] || colors.info;
+    notification.style.backgroundColor = colorScheme.bg;
+    notification.style.borderLeft = `4px solid ${colorScheme.border}`;
+
+    // CSS 애니메이션 추가 (한 번만)
+    if (!document.querySelector('#notification-styles')) {
+        const style = document.createElement('style');
+        style.id = 'notification-styles';
+        style.textContent = `
+            @keyframes slideInRight {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            @keyframes slideOutRight {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
 
     // DOM에 추가
     document.body.appendChild(notification);
 
-    // 3초 후 자동 제거
+    // 자동 제거 시간 설정
+    const autoRemoveTime = duration || (type === 'error' ? 5000 : type === 'warning' ? 4000 : 3000);
+
     setTimeout(() => {
         if (notification.parentNode) {
-            notification.remove();
+            notification.style.animation = 'slideOutRight 0.3s ease-in';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 300);
         }
-    }, 3000);
+    }, autoRemoveTime);
+
+    return notification; // 알림 객체 반환 (필요시 조작 가능)
 }
 
-// 로딩 상태 관리
-function showLoading() {
-    const loading = document.getElementById('loading');
-    if (loading) {
-        loading.style.display = 'flex';
+// 개선된 로딩 상태 관리
+let loadingCount = 0;
+
+function showLoading(message = '처리 중...') {
+    loadingCount++;
+
+    let loading = document.getElementById('loading');
+    if (!loading) {
+        // 로딩 오버레이가 없으면 생성
+        loading = document.createElement('div');
+        loading.id = 'loading';
+        loading.innerHTML = `
+            <div class="loading-backdrop">
+                <div class="loading-content">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-message">처리 중...</div>
+                </div>
+            </div>
+        `;
+
+        // 로딩 스타일 추가
+        const style = document.createElement('style');
+        style.textContent = `
+            #loading {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 9999;
+                display: none;
+            }
+            .loading-backdrop {
+                background: rgba(0, 0, 0, 0.5);
+                width: 100%;
+                height: 100%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            .loading-content {
+                background: white;
+                padding: 20px 30px;
+                border-radius: 8px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 15px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            }
+            .loading-spinner {
+                width: 40px;
+                height: 40px;
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #3498db;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+            .loading-message {
+                color: #333;
+                font-weight: 500;
+                font-size: 14px;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+        document.body.appendChild(loading);
     }
+
+    // 메시지 업데이트
+    const messageElement = loading.querySelector('.loading-message');
+    if (messageElement) {
+        messageElement.textContent = message;
+    }
+
+    loading.style.display = 'flex';
 }
 
 function hideLoading() {
-    const loading = document.getElementById('loading');
-    if (loading) {
-        loading.style.display = 'none';
+    loadingCount = Math.max(0, loadingCount - 1);
+
+    if (loadingCount === 0) {
+        const loading = document.getElementById('loading');
+        if (loading) {
+            loading.style.display = 'none';
+        }
+    }
+}
+
+// 프로그레스 바 표시 (대용량 파일 처리용)
+function showProgress(message = '진행 중...', progress = 0) {
+    let progressOverlay = document.getElementById('progress-overlay');
+    if (!progressOverlay) {
+        progressOverlay = document.createElement('div');
+        progressOverlay.id = 'progress-overlay';
+        progressOverlay.innerHTML = `
+            <div class="loading-backdrop">
+                <div class="progress-content">
+                    <div class="progress-message">진행 중...</div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar"></div>
+                    </div>
+                    <div class="progress-percent">0%</div>
+                </div>
+            </div>
+        `;
+
+        // 프로그레스 스타일 추가
+        const style = document.createElement('style');
+        style.textContent = `
+            #progress-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 9999;
+                display: none;
+            }
+            .progress-content {
+                background: white;
+                padding: 25px;
+                border-radius: 8px;
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+                min-width: 300px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            }
+            .progress-message {
+                color: #333;
+                font-weight: 500;
+                text-align: center;
+            }
+            .progress-bar-container {
+                background: #f0f0f0;
+                border-radius: 10px;
+                height: 8px;
+                overflow: hidden;
+            }
+            .progress-bar {
+                background: #3498db;
+                height: 100%;
+                width: 0%;
+                transition: width 0.3s ease;
+            }
+            .progress-percent {
+                text-align: center;
+                color: #666;
+                font-size: 14px;
+            }
+        `;
+        document.head.appendChild(style);
+        document.body.appendChild(progressOverlay);
+    }
+
+    const messageElement = progressOverlay.querySelector('.progress-message');
+    const progressBar = progressOverlay.querySelector('.progress-bar');
+    const progressPercent = progressOverlay.querySelector('.progress-percent');
+
+    messageElement.textContent = message;
+    progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+    progressPercent.textContent = `${Math.round(progress)}%`;
+
+    progressOverlay.style.display = 'flex';
+}
+
+function hideProgress() {
+    const progressOverlay = document.getElementById('progress-overlay');
+    if (progressOverlay) {
+        progressOverlay.style.display = 'none';
     }
 }

@@ -40,7 +40,13 @@ async def list_files(response: Response):
     예: ["test/20250822.json", "wtf/color.json", "root.json"]
     """
     base = Path(path_service.data_dir).resolve()
-    response.headers["Cache-Control"] = "no-store"  # 캐시 방지(선택)
+
+    # 강력한 캐시 방지 헤더 설정
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    response.headers["Last-Modified"] = "Thu, 01 Jan 1970 00:00:00 GMT"
+
     try:
         files = [
             p.relative_to(base).as_posix()
@@ -69,10 +75,76 @@ async def load_path_data(filename: str):
 async def save_path_data(filename: str, path_data: PathData):
     """경로 데이터를 JSON 파일로 저장"""
     try:
+        # 파일명 검증
+        if not filename:
+            raise HTTPException(status_code=400, detail="파일명이 필요합니다")
+
+        if len(filename) > 255:
+            raise HTTPException(status_code=400, detail="파일명이 너무 깁니다 (최대 255자)")
+
+        # 특수문자 검증
+        import re
+        if re.search(r'[<>:"/\\|?*\x00-\x1f]', filename):
+            raise HTTPException(status_code=400, detail="파일명에 사용할 수 없는 문자가 포함되어 있습니다")
+
+        if not filename.lower().endswith('.json'):
+            raise HTTPException(status_code=400, detail="JSON 파일만 저장 가능합니다")
+
+        # 경로 보안 검증
+        target_path = (Path(path_service.data_dir) / filename).resolve()
+        base_path = Path(path_service.data_dir).resolve()
+
+        if not str(target_path).startswith(str(base_path)):
+            raise HTTPException(status_code=400, detail="유효하지 않은 경로입니다")
+
+        # 데이터 검증
+        if not path_data:
+            raise HTTPException(status_code=400, detail="저장할 데이터가 없습니다")
+
+        if not hasattr(path_data, 'Node') or not hasattr(path_data, 'Link'):
+            raise HTTPException(status_code=400, detail="Node와 Link 데이터가 필요합니다")
+
+        # 데이터 크기 검증 (10MB 제한)
+        try:
+            data_json = json.dumps(path_data.dict(), ensure_ascii=False, indent=2)
+            data_size = len(data_json.encode('utf-8'))
+
+            if data_size > 10 * 1024 * 1024:  # 10MB
+                raise HTTPException(status_code=413, detail="데이터가 너무 큽니다 (최대 10MB)")
+
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"데이터 직렬화 오류: {str(e)}")
+
+        # 디렉터리 생성 (필요시)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 파일 저장
         result = path_service.save_path_data(filename, path_data)
-        return {"message": result}
+
+        # 저장된 파일 검증
+        if target_path.exists():
+            file_size = target_path.stat().st_size
+            size_text = f"{file_size / 1024:.2f}KB" if file_size < 1024 * 1024 else f"{file_size / (1024 * 1024):.2f}MB"
+            return {
+                "message": f"{filename} 저장 완료",
+                "size": size_text,
+                "path": filename
+            }
+        else:
+            raise HTTPException(status_code=500, detail="파일 저장 후 확인 실패")
+
+    except HTTPException:
+        raise
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="저장 경로를 찾을 수 없습니다")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="파일 저장 권한이 없습니다")
+    except OSError as e:
+        if "No space left" in str(e):
+            raise HTTPException(status_code=507, detail="저장 공간이 부족합니다")
+        raise HTTPException(status_code=500, detail=f"파일 시스템 오류: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"저장 중 오류가 발생했습니다: {str(e)}")
 
 
 @router.get("/current", response_model=PathData)
@@ -121,19 +193,68 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/download")
+async def download_file(path: str):
+    """JSON 파일 다운로드 (쿼리 파라미터 버전)"""
+    try:
+        # 경로 보안 검증
+        safe_path = _safe_join(path)
+
+        # 파일 존재 및 타입 검증
+        if not safe_path.exists():
+            raise HTTPException(status_code=404, detail=f"파일을 찾을 수 없습니다: {path}")
+
+        if not safe_path.is_file():
+            raise HTTPException(status_code=400, detail="폴더는 다운로드할 수 없습니다")
+
+        # 파일 확장자 검증
+        if not safe_path.suffix.lower() == '.json':
+            raise HTTPException(status_code=400, detail="JSON 파일만 다운로드 가능합니다")
+
+        # 파일 크기 검증 (50MB 제한)
+        file_size = safe_path.stat().st_size
+        if file_size > 50 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="파일이 너무 큽니다 (최대 50MB)")
+
+        # 빈 파일 검증
+        if file_size == 0:
+            raise HTTPException(status_code=400, detail="빈 파일은 다운로드할 수 없습니다")
+
+        # JSON 유효성 검증
+        try:
+            with safe_path.open('r', encoding='utf-8') as f:
+                json.load(f)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="유효하지 않은 JSON 파일입니다")
+        except UnicodeDecodeError:
+            raise HTTPException(status_code=400, detail="파일 인코딩을 읽을 수 없습니다")
+
+        # 파일명 추출 (전체 경로에서)
+        filename = safe_path.name
+
+        return FileResponse(
+            path=str(safe_path),
+            filename=filename,
+            media_type='application/json',
+            headers={
+                "Content-Length": str(file_size),
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"다운로드 중 오류가 발생했습니다: {str(e)}")
+
+
 @router.get("/download/{filename}")
-async def download_file(filename: str):
-    """JSON 파일 다운로드"""
-    file_path = os.path.join(path_service.data_dir, filename)
-    
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail=f"File {filename} not found")
-    
-    return FileResponse(
-        path=file_path,
-        filename=filename,
-        media_type='application/json'
-    )
+async def download_file_legacy(filename: str):
+    """JSON 파일 다운로드 (레거시 경로 파라미터 버전)"""
+    # 새로운 쿼리 파라미터 버전으로 리다이렉트
+    return await download_file(filename)
 
 
 # Node API
@@ -325,7 +446,12 @@ async def move_file(req: MoveReq):
 
 @router.get("/files/dirs", response_model=List[str])
 async def list_directories(response: Response):
-    response.headers["Cache-Control"] = "no-store"
+    # 강력한 캐시 방지 헤더 설정
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    response.headers["Last-Modified"] = "Thu, 01 Jan 1970 00:00:00 GMT"
+
     base = Path(path_service.data_dir).resolve()
     if not base.exists():
         return []

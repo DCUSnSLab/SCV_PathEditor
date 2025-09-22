@@ -267,33 +267,121 @@ class UIManager {
 
     showSaveModal() {
         const saveFilename = document.getElementById('saveFilename');
-        saveFilename.value = 'new_path.json';
+
+        // 현재 시간을 기반으로 기본 파일명 생성
+        const now = new Date();
+        const timestamp = now.toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_');
+        saveFilename.value = `path_${timestamp}.json`;
+
         this.showModal('saveModal');
     }
 
     async confirmSave() {
         const filename = document.getElementById('saveFilename').value.trim();
+
+        // 상세한 파일명 검증
         if (!filename) {
             showNotification('파일명을 입력해주세요', 'warning');
             return;
         }
 
-        if (!filename.endsWith('.json')) {
+        // 파일명 길이 검증
+        if (filename.length > 255) {
+            showNotification('파일명이 너무 깁니다 (최대 255자)', 'warning');
+            return;
+        }
+
+        // 특수문자 검증
+        const invalidChars = /[<>:"/\\|?*\x00-\x1f]/;
+        if (invalidChars.test(filename)) {
+            showNotification('파일명에 사용할 수 없는 문자가 포함되어 있습니다', 'warning');
+            return;
+        }
+
+        if (!filename.toLowerCase().endsWith('.json')) {
             showNotification('파일명은 .json 확장자로 끝나야 합니다', 'warning');
             return;
         }
 
+        // 데이터 유효성 검증
+        if (!this.currentData || !this.currentData.Node || !this.currentData.Link) {
+            showNotification('저장할 데이터가 없습니다', 'warning');
+            return;
+        }
+
+        // 바로 저장 진행 (UTM 검증 제거)
+        await this.proceedWithSave(filename);
+    }
+
+    async proceedWithSave(filename) {
         try {
-            showLoading();
+            // 중복 파일 확인 (선택적)
+            const files = await pathAPI.listFiles();
+            if (files.includes(filename)) {
+                if (!confirm(`${filename} 파일이 이미 존재합니다. 덮어쓰시겠습니까?`)) {
+                    return;
+                }
+            }
+
+        try {
+            showLoading('GPS 기준으로 UTM 좌표를 재계산하고 저장중입니다...');
+            showNotification('GPS 기준으로 UTM 좌표를 재계산하고 저장중입니다...', 'info');
+
+            // 데이터 크기 확인
+            const dataSize = JSON.stringify(this.currentData).length;
+            const sizeText = dataSize > 1024 * 1024
+                ? `${(dataSize / (1024 * 1024)).toFixed(2)}MB`
+                : `${(dataSize / 1024).toFixed(2)}KB`;
+
+            if (dataSize > 10 * 1024 * 1024) { // 10MB 경고
+                if (!confirm(`파일 크기가 큽니다 (${sizeText}). 계속하시겠습니까?`)) {
+                    return;
+                }
+            }
+
+            // savePathData 내부에서 UTM 재계산이 이루어짐
             await pathAPI.savePathData(filename, this.currentData);
-            showNotification(`${filename}으로 저장되었습니다`, 'success');
+
+            // 저장 완료 메시지
+            let successMsg = `${filename} (${sizeText}) 저장이 완료되었습니다`;
+            successMsg += `\n📊 노드: ${this.currentData.Node.length}개, 링크: ${this.currentData.Link.length}개`;
+            successMsg += `\n🔄 모든 UTM 좌표가 GPS 기준으로 재계산되었습니다 (Zone: 52N)`;
+
+            showNotification(successMsg, 'success');
             this.hideModal('saveModal');
-            this.loadFileList(); // 파일 목록 새로고침
-            
+
+            // 로컬 데이터도 UTM 재계산 적용 (UI 업데이트)
+            this.updateTables();
+            this.updateMap();
+
+            // 파일 목록 새로고침
+            await this.loadFileList();
+
         } catch (error) {
-            handleAPIError(error, '파일 저장 중 오류가 발생했습니다');
+            console.error('Save error:', error);
+
+            // 구체적인 오류 메시지
+            let errorMsg = '파일 저장 중 오류가 발생했습니다';
+            if (error.message) {
+                if (error.message.includes('403') || error.message.includes('권한')) {
+                    errorMsg = '파일 저장 권한이 없습니다';
+                } else if (error.message.includes('용량') || error.message.includes('space')) {
+                    errorMsg = '저장 공간이 부족합니다';
+                } else if (error.message.includes('JSON')) {
+                    errorMsg = '데이터 형식 오류로 저장할 수 없습니다';
+                } else {
+                    errorMsg = `저장 실패: ${error.message}`;
+                }
+            }
+
+            showNotification(errorMsg, 'error');
+            throw error; // 에러를 다시 던져서 상위에서 처리할 수 있도록
         } finally {
             hideLoading();
+        }
+        } catch (outerError) {
+            console.error('proceedWithSave outer error:', outerError);
+            showNotification(`저장 처리 중 오류: ${outerError.message}`, 'error');
         }
     }
 
@@ -322,29 +410,71 @@ class UIManager {
             return;
         }
 
+        // 전체 경로 사용 (하위 폴더 파일 지원)
+        const filepath = selectedFile.fullPath;
         const filename = selectedFile.name;
+
+        // 파일 크기 예상 확인 (선택적)
+        if (selectedFile.size && selectedFile.size.includes('MB')) {
+            const sizeNum = parseFloat(selectedFile.size);
+            if (sizeNum > 50) {
+                if (!confirm('파일이 큽니다. 다운로드하시겠습니까?')) {
+                    return;
+                }
+            }
+        }
 
         try {
             showLoading();
-            // API는 전체 경로가 아닌 파일명만 필요로 할 수 있습니다.
-            // 백엔드 API의 downloadFile 구현에 따라 selectedFile.fullPath 또는 filename을 사용합니다.
-            // 현재 백엔드 API는 filename만 받으므로 filename을 사용합니다.
-            const blob = await pathAPI.downloadFile(filename);
-            
-            // 파일 다운로드 로직
+
+            // 다운로드 시작 알림
+            showNotification('파일 다운로드를 시작합니다...', 'info');
+
+            const blob = await pathAPI.downloadFile(filepath);
+
+            // 파일 다운로드 실행
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
+            a.style.display = 'none';
+
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            
-            showNotification(`${filename}이 다운로드되었습니다`, 'success');
-            
+
+            // 정리
+            setTimeout(() => {
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            }, 100);
+
+            // 파일 크기 표시
+            const sizeText = blob.size > 1024 * 1024
+                ? `${(blob.size / (1024 * 1024)).toFixed(2)}MB`
+                : `${(blob.size / 1024).toFixed(2)}KB`;
+
+            showNotification(`${filename} (${sizeText}) 다운로드가 완료되었습니다`, 'success');
+
         } catch (error) {
-            handleAPIError(error, '파일 다운로드 중 오류가 발생했습니다');
+            console.error('Download error:', error);
+
+            // 구체적인 오류 메시지 제공
+            let errorMsg = '파일 다운로드 중 오류가 발생했습니다';
+            if (error.message) {
+                if (error.message.includes('404')) {
+                    errorMsg = '파일을 찾을 수 없습니다';
+                } else if (error.message.includes('403')) {
+                    errorMsg = '파일 접근 권한이 없습니다';
+                } else if (error.message.includes('큽니다')) {
+                    errorMsg = error.message;
+                } else if (error.message.includes('네트워크')) {
+                    errorMsg = error.message;
+                } else {
+                    errorMsg = `다운로드 실패: ${error.message}`;
+                }
+            }
+
+            showNotification(errorMsg, 'error');
         } finally {
             hideLoading();
         }
