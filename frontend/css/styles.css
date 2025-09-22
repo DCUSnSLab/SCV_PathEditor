@@ -65,7 +65,6 @@ details > div {
     color: white;
     padding: 1rem 2rem;
     display: flex;
-    justify-content: space-between;
     align-items: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
@@ -73,9 +72,16 @@ details > div {
 .header h1 {
     font-size: 1.5rem;
     font-weight: 600;
+    margin-right: 1rem;
 }
 
-.header-controls {
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.file-controls {
     display: flex;
     gap: 0.5rem;
 }
@@ -693,7 +699,7 @@ details > div {
         height: calc(100vh - 480px);
     }
     
-    .header-controls {
+    .file-controls {
         flex-wrap: wrap;
     }
     
