@@ -12,6 +12,47 @@ body {
     overflow: hidden;
 }
 
+details {
+    margin: 5px 0 20px;
+    background-color: #f5f5f5;
+    padding: 10px;
+    padding-left: 15px;
+    border-radius:15px;
+}
+details > summary {
+    font-size: 1.2em;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+details > div {
+    margin-top: 10px;
+}
+
+.big-text {
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    color: black;
+}
+
+.middle-text {
+    font-size: 1.0em;
+    font-weight: bold;
+    margin-top: 7px;
+    margin-bottom: 7px;
+    color: black;
+}
+
+.small-text {
+    font-size: 0.95em;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    color: #6c757d;
+}
+
+
 #app {
     height: 100vh;
     display: flex;
@@ -24,7 +65,6 @@ body {
     color: white;
     padding: 1rem 2rem;
     display: flex;
-    justify-content: space-between;
     align-items: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
@@ -32,9 +72,16 @@ body {
 .header h1 {
     font-size: 1.5rem;
     font-weight: 600;
+    margin-right: 1rem;
 }
 
-.header-controls {
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.file-controls {
     display: flex;
     gap: 0.5rem;
 }
@@ -61,11 +108,40 @@ body {
 }
 
 .right-panel {
-    width: 400px;
+    width: 25%;
     background-color: white;
     border-left: 1px solid #ddd;
     padding: 1rem;
     overflow-y: auto;
+}
+
+/* Folding */
+#right-pn {
+    flex: 0 0 25%;
+    overflow: auto;
+}
+
+#right-pn.is-hidden {
+    display: none;
+}
+
+.floating-toggle {
+  position: fixed;        /* 화면 기준 고정 */
+  top: 10%;              /* 상단 여백 */
+  right: 10%;            /* 우측 여백 */
+  z-index: 1000;          /* 다른 요소 위에 표시 */
+  padding: 8px 12px;
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.2s ease;
+}
+
+.floating-toggle:hover {
+  background-color: #0056b3;
 }
 
 /* Map */
@@ -76,7 +152,7 @@ body {
 
 /* Control Sections */
 .control-section {
-    margin-bottom: 2rem;
+    margin-bottom: 0;
     padding-bottom: 1rem;
     border-bottom: 1px solid #eee;
 }
@@ -96,6 +172,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    margin-bottom: 15px;
 }
 
 /* Buttons */
@@ -166,6 +243,51 @@ body {
     background-color: #c0392b;
 }
 
+/* 클립보드 상태 표시 */
+.clipboard-status {
+    font-size: 0.85em;
+    color: #666;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-top: 8px;
+    text-align: center;
+    border-left: 4px solid #6c757d;
+}
+
+.clipboard-status.has-content {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+    border-left-color: #28a745;
+}
+
+/* 잘라내기/붙여넣기 버튼 추가 스타일 */
+.btn-secondary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-secondary:disabled:hover {
+    background-color: #6c757d;
+    transform: none;
+}
+
+#editBtn {
+    margin-top: 10px;
+    width: 100%;
+    background-color: #adb5bd;
+    color: #ffffff;
+}
+
+#batchEditBtn {
+    margin-top: 10px;
+    width: 100%;
+    background-color: #adb5bd;
+    color: #ffffff;
+}
+
 /* File Explorer */
 .file-explorer {
     border: 1px solid #ddd;
@@ -179,6 +301,7 @@ body {
 
 .file-explorer-header {
     display: flex;
+    flex-direction: row-reverse;
     gap: 0.5rem;
     padding: 0.5rem;
     background-color: #f8f9fa;
@@ -335,7 +458,7 @@ body {
 
 /* Selected Node Info */
 #selectedNodeInfo {
-    background-color: #f8f9fa;
+    background-color: #ffffff;
     padding: 1rem;
     border-radius: 4px;
     border: 1px solid #e9ecef;
@@ -366,6 +489,7 @@ body {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.8rem;
+    background-color: #ffffff;
 }
 
 .data-table th {
@@ -453,6 +577,7 @@ body {
 
 /* Form */
 .form-group {
+    display: flex;
     margin-bottom: 1rem;
 }
 
@@ -538,11 +663,6 @@ body {
     box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
-.node-marker.selected div {
-    background-color: #f1c40f !important;
-    transform: scale(1.2);
-}
-
 .node-marker:hover div {
     transform: scale(1.1);
     box-shadow: 0 3px 6px rgba(0,0,0,0.4);
@@ -579,7 +699,7 @@ body {
         height: calc(100vh - 480px);
     }
     
-    .header-controls {
+    .file-controls {
         flex-wrap: wrap;
     }
     
@@ -628,10 +748,31 @@ body {
 }
 
 .form-control {
-    width: 100%;
+    width: 50%;
     padding: 0.5rem;
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 0.9rem;
     background-color: white;
 }
+
+/* 긴 헤딩 화살표 */
+.heading-arrow-long{
+    pointer-events: none;
+    transform-origin: 50% 90%;
+    filter: drop-shadow(0 0 1px rgba(0,0,0,.35));
+}
+
+.leaflet-marker-icon.selected {
+    filter: drop-shadow(0 0 2px rgba(0,0,0,.25));
+}
+
+/* 드래그-오버 중 폴더 강조 */
+.file-item.folder.dropping {
+    background-color: #fff3cd;  /* 은은한 노랑 */
+    border: 1px dashed #f0ad4e;
+}
+
+.file-explorer-pathbar { display:flex; gap:.5rem; align-items:center; padding:4px 6px; }
+#fileExplorerPath { font-family:ui-monospace,monospace; opacity:.8; }
+.file-item.folder.up .file-name { font-weight:600; }

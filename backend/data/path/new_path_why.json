@@ -1,0 +1,72 @@
+{
+    "Node": [
+        {
+            "ID": "N0038",
+            "AdminCode": "",
+            "NodeType": 1,
+            "ITSNodeID": "",
+            "Maker": "SCV Web Editor",
+            "UpdateDate": "20250903",
+            "Version": "2021",
+            "Remark": "",
+            "HistType": "02A",
+            "HistRemark": "Web Editor로 생성",
+            "GpsInfo": {
+                "Lat": 37.571454,
+                "Long": 126.978264,
+                "Alt": 0.0
+            },
+            "UtmInfo": {
+                "Easting": 320675.014205985,
+                "Northing": 4160717.8131007617,
+                "Zone": "52N"
+            }
+        },
+        {
+            "ID": "N0039",
+            "AdminCode": "",
+            "NodeType": 1,
+            "ITSNodeID": "",
+            "Maker": "SCV Web Editor",
+            "UpdateDate": "20250903",
+            "Version": "2021",
+            "Remark": "",
+            "HistType": "02A",
+            "HistRemark": "Web Editor로 생성",
+            "GpsInfo": {
+                "Lat": 37.569379,
+                "Long": 126.979766,
+                "Alt": 0.0
+            },
+            "UtmInfo": {
+                "Easting": 320808.3016859852,
+                "Northing": 4160486.824100761,
+                "Zone": "52N"
+            }
+        }
+    ],
+    "Link": [
+        {
+            "ID": "L00380039",
+            "AdminCode": "110",
+            "RoadRank": 1,
+            "RoadType": 1,
+            "RoadNo": "20",
+            "LinkType": 3,
+            "LaneNo": 2,
+            "R_LinkID": "R_N0038",
+            "L_LinkID": "L_N0039",
+            "FromNodeID": "N0038",
+            "ToNodeID": "N0039",
+            "SectionID": "QUICKLINK_SECTION",
+            "Length": 0.26669,
+            "ITSLinkID": "ITS_1756903348698",
+            "Maker": "QuickLink 자동생성",
+            "UpdateDate": "20250903",
+            "Version": "2021",
+            "Remark": "QuickLink로 자동 생성된 링크",
+            "HistType": "02A",
+            "HistRemark": "QuickLink 기능으로 생성"
+        }
+    ]
+}

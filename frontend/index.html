@@ -15,67 +15,103 @@
     <div id="app">
         <!-- Header -->
         <header class="header">
-            <h1>SCV Path Editor Web</h1>
-            <div class="header-controls">
-                <button id="loadBtn" class="btn btn-primary">Load</button>
-                <button id="saveBtn" class="btn btn-primary">Save</button>
-                <input type="file" id="fileInput" accept=".json" style="display: none;">
-                <button id="uploadBtn" class="btn btn-secondary">Upload</button>
-                <button id="downloadBtn" class="btn btn-secondary">Download</button>
+            <div class="header-left">
+                <h1>SCV Path Editor Web</h1>
+                <div class="file-controls">
+                    <button id="loadBtn" class="btn btn-primary">Open File</button>
+                    <button id="importBtn" class="btn btn-primary">Import File</button>
+                    <button id="saveBtn" class="btn btn-primary">Save</button>
+                    <input type="file" id="fileInput" accept=".json" style="display: none;">
+                    <button id="uploadBtn" class="btn btn-secondary">Upload</button>
+                    <button id="downloadBtn" class="btn btn-secondary">Download</button>
+                </div>
             </div>
         </header>
+
+        <button id="menu-btn" class="floating-toggle" aria-controls="right-pn" aria-expanded="true">
+            테이블 및 정보
+        </button>
 
         <!-- Main Content -->
         <div class="main-content">
             <!-- Left Panel - Controls -->
             <div class="left-panel">
-                <div class="control-section">
-                    <h3>편집 모드</h3>
-                    <div class="mode-buttons">
-                        <button id="selectModeBtn" class="btn btn-mode">Select Node</button>
-                        <button id="dragModeBtn" class="btn btn-mode">Drag Node</button>
-                        <button id="addNodeModeBtn" class="btn btn-mode">Add Node</button>
-                        <button id="quickLinkModeBtn" class="btn btn-mode">Quick Link</button>
-                        <button id="intervalCreateModeBtn" class="btn btn-mode">구간 노드 생성</button>
-                    </div>
-                </div>
 
                 <div class="control-section">
-                    <h3>지도 옵션</h3>
-                    <div class="form-check">
-                        <input type="checkbox" id="toggleNodeIds" class="form-check-input" checked>
-                        <label for="toggleNodeIds" class="form-check-label">노드 ID 표시</label>
-                    </div>
+                    <p class="big-text">뷰 설정</p>
                     <div class="form-group">
-                        <label for="mapStyleSelect">지도 스타일:</label>
-                        <select id="mapStyleSelect" class="form-control">
+                        <p class="middle-text">지도 스타일</p>
+                        <select id="mapStyleSelect" class="form-control" style="margin-left:10px;">
                             <option value="street" selected>일반 지도</option>
-                            <option value="satellite">위성 지도</option>
+                            <option value="satellite">위성 지도 (Google 21레벨)</option>
+                            <option value="hybrid">하이브리드 (Google 위성+라벨) 🎯</option>
+                            <option value="terrain">지형 지도 (Google Terrain) 🏔️</option>
+                            <option value="dark">다크 모드 (CartoDB Dark) 🌙</option>
+                            <option value="bing">위성 지도 (Bing 20레벨)</option>
+                            <option value="mapbox">위성 지도 (Mapbox 22레벨)</option>
+                            <option value="yandex">위성 지도 (Yandex 21레벨)</option>
+                            <option value="carto">지형 지도 (Carto 20레벨)</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="nodeInterval">구간 간격 (m):</label>
-                        <input type="number" id="nodeInterval" class="form-control" value="10" min="1">
+                    <div class="form-check">
+                        <input type="checkbox" id="toggleNodeIds" class="form-check-input" checked>
+                        <p class="small-text">노드 ID 표시</p>
                     </div>
                 </div>
 
                 <div class="control-section">
-                    <h3>선택된 노드</h3>
-                    <div id="selectedNodeInfo">
-                        <p>노드를 선택해주세요</p>
+                    <p class="big-text">도구</p>
+                    <div class="mode-buttons">
+                        <p class="middle-text">노드</p>
+                        <button id="selectModeBtn" class="btn btn-mode">복수 선택 모드</button>
+                        <button id="addNodeModeBtn" class="btn btn-mode">생성 모드</button>
+                        <button id="dragModeBtn" class="btn btn-mode">이동 모드</button>
+                        <button id="deleteModeBtn" class="btn btn-mode">삭제 모드<br/>(미구현)</button>
+                    </div>
+                    <div class="mode-buttons">
+                        <p class="middle-text">편집</p>
+                        <button id="cutNodesBtn" class="btn btn-secondary" disabled>✂️ 잘라내기</button>
+                        <button id="pasteNodesBtn" class="btn btn-secondary" disabled>📍 붙여넣기 (비활성)</button>
+                        <button id="clearClipboardBtn" class="btn btn-secondary" disabled>🗑️ 클립보드 비우기</button>
+                        <div class="clipboard-status" id="clipboardStatus">
+                            📭 클립보드가 비어있습니다
+                        </div>
+                    </div>
+                    <div class="mode-buttons">
+                        <p class="middle-text">구간 노드</p>
+                        <div class="form-group">
+                            <label for="nodeInterval">구간 간격 (m):</label>
+                            <input type="number" id="nodeInterval" class="form-control" value="10" min="1" style="margin-left:10px;width:30%;">
+                        </div>
+                        <button id="intervalCreateModeBtn" class="btn btn-mode">구간 노드 생성</button>
+                    </div>
+                    <div class="mode-buttons">
+                        <p class="middle-text">링크</p>
+                        <button id="linkTwoNodesModeBtn" class="btn btn-mode">두 노드 잇기 모드</button>
+                        <button id="linkManyNodesModeBtn" class="btn btn-mode">여러 노드 잇기 모드<br/>(미구현)</button>
                     </div>
                 </div>
 
                 <div class="control-section">
-                    <h3>파일 탐색기</h3>
+                    <p class="big-text">파일탐색기</p>
                     <div class="file-explorer">
+                        <!-- 변경: 삭제 버튼 추가 -->
                         <div class="file-explorer-header">
                             <button id="refreshFiles" class="btn-icon" title="파일 목록 새로보기">
-                                <span>🔄</span>
+                                <span>새로고침</span>
                             </button>
                             <button id="newFolder" class="btn-icon" title="새 폴더">
-                                <span>📁+</span>
+                                <span>새 폴더</span>
                             </button>
+                            <button id="deleteFile" class="btn-icon" title="선택 파일 삭제">
+                                <span>삭제</span>
+                            </button>
+                        </div>
+                        <div class="file-explorer-pathbar">
+                            <!-- index.html, 파일탐색기 패널의 경로바 옆 -->
+                            <button id="goRootFolder" class="btn-icon" title="루트로">⌂</button>
+                            <button id="goUpFolder" class="btn-icon" title="상위 폴더로">⬆</button>
+                            <span id="fileExplorerPath">/</span>
                         </div>
                         <div class="file-tree" id="fileTree">
                             <div class="file-item loading">
@@ -93,9 +129,12 @@
             </div>
 
             <!-- Right Panel - Data Tables -->
-            <div class="right-panel">
+            <div class="right-panel" id="right-pn">
                 <div class="table-section">
-                    <h3>노드 테이블</h3>
+
+                <!--노드 테이블-->
+                <details open>
+                    <summary>노드 테이블</summary>
                     <div class="table-container">
                         <table id="nodeTable" class="data-table">
                             <thead>
@@ -113,25 +152,41 @@
                             <tbody></tbody>
                         </table>
                     </div>
-                </div>
+                </details>
 
-                <div class="table-section">
-                    <h3>링크 테이블</h3>
-                    <div class="table-container">
-                        <table id="linkTable" class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>From</th>
-                                    <th>To</th>
-                                    <th>Length (km)</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
+                <!--링크 테이블-->
+                <details open>
+                    <summary>링크 테이블</summary>
+                    <div class="table-section">
+                        <div class="table-container">
+                            <table id="linkTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>From</th>
+                                        <th>To</th>
+                                        <th>Length (km)</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
+                </details>
+                
+                <!--선택된 노드 속성-->
+                <details open>
+                    <summary>선택된 노드 속성</summary>
+                    <div class="control-section">
+                        <div id="selectedNodeInfo">
+                            <p>노드를 선택해주세요</p>
+                        </div>
+                        <button id="editBtn" class="btn btn-mode">단일 노드 속성 수정</button>
+                        <button id="batchEditBtn" class="btn btn-mode">선택된 노드 속성 일괄 수정</button>
+                    </div>
+                </details>
+
             </div>
         </div>
     </div>
@@ -165,6 +220,14 @@
                         <label>Remark:</label>
                         <input type="text" id="nodeRemark" value="">
                     </div>
+                    <div class="form-group">
+                        <label>NodeType:</label>
+                        <input type="number" id="nodeType" value="1" min="1" step="1"/>
+                    </div>
+                    <div class="form-group">
+                        <label>Heading:</label>
+                        <input type="number" id="nodeHeading" value="-1.0" step="any" step="0.1"/>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -174,7 +237,42 @@
         </div>
     </div>
 
-    <div id="saveModal" class="modal">
+    <div id="batchEditModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>선택된 노드 속성 일괄 수정</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="batchForm">
+                    <div class="form-group">
+                        <label>고도(Alt):</label>
+                        <input type="number" id="batchAlt" step="any" placeholder="값 입력 시 일괄 덮어쓰기">
+                    </div>
+                    <div class="form-group">
+                        <label>Maker:</label>
+                        <input type="text" id="batchMaker" placeholder="값 입력 시 일괄 덮어쓰기">
+                    </div>
+                    <div class="form-group">
+                        <label>NodeType:</label>
+                        <input type="number" id="batchNodeType" min="1" step="1" placeholder="값 입력 시 일괄 덮어쓰기">
+                    </div>
+                    <div class="form-group">
+                        <label>Heading:</label>
+                        <input type="number" id="batchHeading" step="any" placeholder="값 입력 시 일괄 덮어쓰기">
+                    </div>
+                </form>
+                <p class="middle-text" style="margin-top:6px;color:#666">※ 빈 칸은 변경하지 않습니다.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="applyBatchBtn" class="btn btn-primary">적용</button>
+                <button type="button" id="cancelBatchBtn" class="btn btn-secondary">취소</button>
+            </div>
+        </div>
+    </div>
+
+
+        <div id="saveModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>파일 저장</h3>
@@ -206,7 +304,23 @@
     <script src="js/api.js"></script>
     <script src="js/file-explorer.js"></script>
     <script src="js/map.js"></script>
+    <script src="js/utm-validator.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
+
+<script>
+    const panel = document.getElementById('right-pn');
+    const btn = document.getElementById('menu-btn');
+
+    btn.addEventListener('click', () => {
+    const hidden = panel.classList.toggle('is-hidden');
+    btn.setAttribute('aria-expanded', String(!hidden));
+
+    // Leaflet 맵이 있다면 크기 재계산
+    if (!hidden && window.pathMap?.leafletMap) {
+        setTimeout(() => window.pathMap.leafletMap.invalidateSize(), 0);
+    }
+    });
+</script>

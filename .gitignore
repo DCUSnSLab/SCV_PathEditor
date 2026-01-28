@@ -11,3 +11,10 @@ venv/
 
 # VS Code
 .vscode/
+
+# WebStorm
+.idea/
+
+*.json
+
+*/__pycache__/

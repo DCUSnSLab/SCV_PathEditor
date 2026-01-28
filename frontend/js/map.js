@@ -6,7 +6,8 @@ class PathMap {
         this.nodes = new Map(); // nodeId -> {marker, data}
         this.links = new Map(); // linkId -> {polyline, data}
         this.selectedNode = null;
-        this.mode = 'select'; // select, drag, addNode, quickLink
+        this.selectedNodes = new Set();
+        this.mode = null // select, drag, addNode, quickLink
         this.quickLinkFirstNode = null;
 
         // 구간 노드 생성 관련 변수
@@ -26,9 +27,147 @@ class PathMap {
         this.draggedNodeId = null;
         this.dragUpdateTimeout = null;
 
+        // 드래그 선택 관련 변수들
+        this.isSelectionDragging = false;
+        this.selectionStartPoint = null;
+        this.selectionRectangle = null;
+        this.selectionStartLatLng = null;
+
         this.showNodeIds = true; // 노드 ID 표시 여부 플래그
         
         this.initMap();
+    }
+
+    createSatelliteLayerWithFallback() {
+        // Google Satellite 시도
+        const googleSatellite = L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            attribution: '© Google',
+            maxZoom: 30,
+            maxNativeZoom: 21,
+            zoomOffset: 0,
+            subdomains: ['0', '1', '2', '3']
+        });
+
+        // Esri Satellite (fallback)
+        const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+            maxZoom: 30,
+            maxNativeZoom: 18,
+            zoomOffset: 0
+        });
+
+        // Google 타일 로드 실패 시 Esri로 fallback
+        googleSatellite.on('tileerror', (e) => {
+            console.log('Google Satellite 타일 로드 실패, Esri로 전환');
+            if (this.map.hasLayer(googleSatellite)) {
+                this.map.removeLayer(googleSatellite);
+                this.map.addLayer(esriSatellite);
+                this.tileLayers.satellite = esriSatellite;
+            }
+        });
+
+        return googleSatellite;
+    }
+
+    createBingLayer() {
+        // Bing Maps Satellite용 커스텀 레이어
+        const BingLayer = L.TileLayer.extend({
+            getTileUrl: function(coords) {
+                var quadkey = this._coordsToQuadKey(coords.x, coords.y, coords.z);
+                return 'https://ecn.t' + Math.floor(Math.random() * 4) + '.tiles.virtualearth.net/tiles/a' + quadkey + '?g=1';
+            },
+            
+            _coordsToQuadKey: function(x, y, z) {
+                var quadkey = '';
+                for (var i = z; i > 0; i--) {
+                    var digit = 0;
+                    var mask = 1 << (i - 1);
+                    if ((x & mask) !== 0) digit += 1;
+                    if ((y & mask) !== 0) digit += 2;
+                    quadkey += digit;
+                }
+                return quadkey;
+            }
+        });
+
+        return new BingLayer('', {
+            attribution: '© Microsoft Bing Maps',
+            maxZoom: 30,
+            maxNativeZoom: 20, // Bing은 20레벨까지 네이티브 지원
+            zoomOffset: 0,
+            tileSize: 256
+        });
+    }
+
+    createMapboxLayer() {
+        // Mapbox API 키 설정 (여기에 본인 API 키 넣으세요)
+        const MAPBOX_API_KEY = 'pk.eyJ1IjoiYmFja2dyb3VuZG1pbiIsImEiOiJjbWZnZDNoZm0wMGQ1MmpxMHllYWJqYW5nIn0.OGk1et_KaOJONN7kZwOBeQ';
+        
+        const apiKey = MAPBOX_API_KEY
+        
+        // Mapbox Satellite (최고 해상도 - 22레벨)
+        return L.tileLayer(`https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.png?access_token=${apiKey}`, {
+            attribution: '© Mapbox, © OpenStreetMap',
+            maxZoom: 30,
+            maxNativeZoom: 22, // 최고 해상도!
+            tileSize: 512,
+            zoomOffset: -1
+        });
+    }
+
+    createYandexLayer() {
+        // Yandex Maps Satellite (러시아/동유럽 지역 고해상도)
+        return L.tileLayer('https://sat0{s}.maps.yandex.net/tiles?l=sat&v=3.1012.0&x={x}&y={y}&z={z}&lang=ru_RU', {
+            attribution: '© Yandex Maps',
+            maxZoom: 30,
+            maxNativeZoom: 21,
+            zoomOffset: 0,
+            subdomains: ['1', '2', '3', '4']
+        });
+    }
+
+    createCartoLayer() {
+        // CartoDB Positron with high-res satellite overlay
+        return L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/rastertiles/voyager_nolabels/{z}/{x}/{y}.png', {
+            attribution: '© CartoDB, © OpenStreetMap',
+            maxZoom: 30,
+            maxNativeZoom: 20,
+            zoomOffset: 0,
+            subdomains: ['a', 'b', 'c', 'd']
+        });
+    }
+
+    createGoogleHybridLayer() {
+        // Google Hybrid (위성 + 라벨) - 실용적!
+        return L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            attribution: '© Google',
+            maxZoom: 30,
+            maxNativeZoom: 21,
+            zoomOffset: 0,
+            subdomains: ['0', '1', '2', '3']
+        });
+    }
+
+    createGoogleTerrainLayer() {
+        // Google Terrain - 지형 정보 최고!
+        return L.tileLayer('https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+            attribution: '© Google',
+            maxZoom: 30,
+            maxNativeZoom: 20,
+            zoomOffset: 0,
+            subdomains: ['0', '1', '2', '3']
+        });
+    }
+
+    createDarkLayer() {
+        // Dark Mode 지도 - 개쩌는 스타일!
+        return L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', {
+            attribution: '© CartoDB, © OpenStreetMap',
+            maxZoom: 30,
+            maxNativeZoom: 20,
+            zoomOffset: 0,
+            subdomains: ['a', 'b', 'c', 'd']
+        });
     }
 
     setMapStyle(styleName) {
@@ -50,10 +189,22 @@ class PathMap {
         this.showNodeIds = visible;
         this.nodes.forEach(nodeInfo => {
             const marker = nodeInfo.marker;
+            const nodeId = nodeInfo.data.ID;
+
+            // 기존 tooltip 제거 후 새로 생성
+            marker.unbindTooltip();
+
+            const label = L.tooltip({
+                permanent: visible,
+                direction: 'top',
+                offset: [0, -10],
+                className: 'node-label'
+            }).setContent(nodeId);
+
+            marker.bindTooltip(label);
+
             if (visible) {
                 marker.openTooltip();
-            } else {
-                marker.closeTooltip();
             }
         });
     }
@@ -75,12 +226,18 @@ class PathMap {
         this.tileLayers = {
             street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors',
-                maxZoom: 22
+                maxZoom: 30,
+                maxNativeZoom: 19,
+                zoomOffset: 0
             }),
-            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-                maxZoom: 22
-            })
+            satellite: this.createSatelliteLayerWithFallback(),
+            bing: this.createBingLayer(),
+            mapbox: this.createMapboxLayer(),
+            yandex: this.createYandexLayer(),
+            carto: this.createCartoLayer(),
+            hybrid: this.createGoogleHybridLayer(),
+            terrain: this.createGoogleTerrainLayer(),
+            dark: this.createDarkLayer()
         };
 
         // 기본 타일 레이어 추가
@@ -97,6 +254,10 @@ class PathMap {
         });
 
         // 전역 마우스 이벤트 (드래그용)
+        this.map.on('mousedown', (e) => {
+            this.handleGlobalMouseDown(e);
+        });
+
         this.map.on('mousemove', (e) => {
             this.handleGlobalMouseMove(e);
         });
@@ -104,6 +265,9 @@ class PathMap {
         this.map.on('mouseup', (e) => {
             this.handleGlobalMouseUp(e);
         });
+
+        // 키보드 이벤트 리스너 (Ctrl 키 감지용)
+        this.setupKeyboardListeners();
     }
 
     handleMapClick(e) {
@@ -115,6 +279,8 @@ class PathMap {
             this.handleQuickLinkClick(e);
         } else if (this.mode === 'intervalCreate') {
             this.handleIntervalCreateClick(e.latlng);
+        } else if (this.mode === 'delete') {
+
         }
         
         if (this.onMapClick) {
@@ -191,6 +357,7 @@ class PathMap {
     resetQuickLinkSelection() {
         if (this.quickLinkFirstNode) {
             this.highlightNode(this.quickLinkFirstNode.nodeId, '#e74c3c'); // 원래 색상으로 복원
+            this.refreshNodeAppearance(this.quickLinkFirstNode.nodeId);
             this.quickLinkFirstNode = null;
         }
     }
@@ -239,11 +406,15 @@ class PathMap {
         if (mode !== 'intervalCreate') {
             this.resetIntervalCreate();
         }
-        
-        // QuickLink 모드가 아닐 때 선택 상태 초기화
-        if (mode !== 'quickLink') {
-            this.resetQuickLinkSelection();
-        }
+
+        // // QuickLink 모드가 아닐 때 선택 상태 초기화
+        // if (mode !== 'quickLink') {
+        //     this.resetQuickLinkSelection();
+        // }
+
+        // ★ 복수 선택도 모드 변경 시 초기화
+        this.clearSelections();
+        this.refreshAllNodeAppearances();
         
         // 드래그 모드 설정
         this.nodes.forEach(nodeInfo => {
@@ -266,26 +437,21 @@ class PathMap {
         const { GpsInfo, ID } = nodeData;
         const latlng = [GpsInfo.Lat, GpsInfo.Long];
 
-        // 일반 마커로 변경 (CircleMarker 대신 Marker 사용)
+        const baseColor = this.nodeTypeToColor(nodeData.NodeType);
         const customIcon = L.divIcon({
             className: 'node-marker',
-            html: `<div style="background-color: #e74c3c; border: 2px solid white; border-radius: 50%; width: 16px; height: 16px;"></div>`,
-            iconSize: [16, 16],
-            iconAnchor: [8, 8]
+            html: `<div style="background-color:${baseColor}; border:2px solid white; border-radius:50%; width:16px; height:16px;"></div>`,
+            iconSize: [16,16],
+            iconAnchor: [8,8]
         });
 
-        const marker = L.marker(latlng, {
-            icon: customIcon,
-            draggable: false
-        });
-
-        // 드래그 상태 추적을 위한 플래그
+        const marker = L.marker(latlng, { icon: customIcon, draggable: false });
         marker._isDraggable = false;
         marker._nodeId = ID;
 
         // 라벨 추가
         const label = L.tooltip({
-            permanent: true,
+            permanent: this.showNodeIds, // showNodeIds 상태에 따라 permanent 설정
             direction: 'top',
             offset: [0, -10],
             className: 'node-label'
@@ -297,14 +463,19 @@ class PathMap {
             marker.openTooltip();
         }
 
-        
-
-        // 이벤트 핸들러
         marker.on('click', (e) => {
             L.DomEvent.stopPropagation(e);
+            // 복수 선택 모드: 토글(누적/해제)
             if (this.mode === 'select') {
-                this.selectNode(ID);
+                this.toggleSelectNode(ID);
+                return;
             }
+            // 특수 모드들(지도 클릭 제스처 사용하는 모드)에서는 건드리지 않음
+            if (this.mode === 'addNode' || this.mode === 'quickLink' || this.mode === 'intervalCreate' || this.mode === 'delete') {
+                return;
+            }
+            // 그 외(아무 모드도 아님/일반 상태/드래그 모드 등): 항상 단일 선택
+            this.selectOnly(ID);
         });
 
         // 드래그 이벤트 핸들러 - DOM 요소에 직접 이벤트 추가
@@ -321,11 +492,14 @@ class PathMap {
             }
         });
 
-        // 지도에 추가
         marker.addTo(this.map);
-
-        // 저장
         this.nodes.set(ID, { marker, data: nodeData });
+
+        // 선택 상태 반영(밝기/테두리)
+        this.refreshNodeAppearance(ID);
+
+        // 헤딩 화살표 쓰신다면 유지
+        this.updateHeadingForNode?.(ID);
 
         return marker;
     }
@@ -334,6 +508,7 @@ class PathMap {
         const nodeInfo = this.nodes.get(nodeId);
         if (nodeInfo) {
             this.map.removeLayer(nodeInfo.marker);
+            if (nodeInfo.headingMarker) this.map.removeLayer(nodeInfo.headingMarker);
             this.nodes.delete(nodeId);
             
             // 선택된 노드였다면 선택 해제
@@ -420,14 +595,12 @@ class PathMap {
     }
 
     selectNode(nodeId) {
-        // 이전 선택 해제
-        if (this.selectedNode) {
-            this.highlightNode(this.selectedNode, '#e74c3c');
-        }
 
-        // 새 노드 선택
+        if (this.selectedNode && this.selectedNode !== nodeId) {
+            this._applySelectVisual(this.selectedNode, false);
+        }
         this.selectedNode = nodeId;
-        this.highlightNode(nodeId, '#f1c40f');
+        this._applySelectVisual(nodeId, true);
 
         if (this.onNodeSelect) {
             const nodeInfo = this.nodes.get(nodeId);
@@ -435,25 +608,74 @@ class PathMap {
         }
     }
 
-    highlightNode(nodeId, color) {
-        const nodeInfo = this.nodes.get(nodeId);
-        if (nodeInfo) {
-            const element = nodeInfo.marker.getElement();
-            if (element) {
-                const iconDiv = element.querySelector('div');
-                if (iconDiv) {
-                    iconDiv.style.backgroundColor = color;
-                }
-                
-                // 선택된 노드 클래스 추가/제거
-                if (color === '#f1c40f') {
-                    element.classList.add('selected');
-                } else {
-                    element.classList.remove('selected');
-                }
-            }
+    highlightNode(nodeId /*, _colorIgnored */) {
+        // 상태는 class로, 색은 NodeType + refresh 로 통일
+        const info = this.nodes.get(nodeId);
+        if (info) {
+            // 호출자가 색 인자를 줘도 무시하고, 실제 외형은 여기서만 결정
+            this.refreshNodeAppearance(nodeId);
         }
     }
+
+    /** --- Heading arrows (▲) --- */
+// 주어진 heading(deg, 북=0°, 시계방향)으로 회전한 주황색 화살표 아이콘 생성
+// ⬇ 기존 _makeHeadingIcon(...) 을 이걸로 교체
+    _makeHeadingIcon(deg) {
+        // 링크 폴리라인 굵기(3)의 1.2배 느낌
+        const shaftWidth = 4;           // 3 * 1.2 ≈ 4
+        const box = 36;                 // 아이콘 전체 박스(px) - 화살 길이감
+        const svg = `
+    <svg width="${box}" height="${box}" viewBox="0 0 100 100">
+      <defs>
+        <marker id="hhead" markerWidth="18" markerHeight="18" refX="9" refY="6" orient="auto">
+          <path d="M0,0 L18,6 L0,12 z" fill="#f39c12" />
+        </marker>
+      </defs>
+      <!-- 아래(노드)에서 위(북)로 뻗는 몸통 -->
+      <line x1="50" y1="92" x2="50" y2="18"
+            stroke="#f39c12" stroke-width="${shaftWidth}"
+            stroke-linecap="round" marker-end="url(#hhead)" />
+    </svg>
+  `;
+        return L.divIcon({
+            className: 'heading-arrow-icon',
+            html: `<div class="heading-arrow-long" style="transform: rotate(${deg}deg);">${svg}</div>`,
+            iconSize: [box, box],
+            // 아이콘의 거의 바닥이 노드 중심에 오도록 앵커 설정
+            iconAnchor: [box / 2, box - 2],
+        });
+    }
+
+
+// 노드의 Heading 값에 맞춰 화살표를 생성/갱신(-1이면 제거)
+    updateHeadingForNode(nodeId) {
+        const entry = this.nodes.get(nodeId);
+        if (!entry) return;
+
+        // 기존 화살표 제거
+        if (entry.headingMarker) {
+            this.map.removeLayer(entry.headingMarker);
+            entry.headingMarker = null;
+        }
+
+        const h = entry.data?.Heading;
+        if (typeof h === 'number' && h >= 0) {
+            entry.headingMarker = L.marker(entry.marker.getLatLng(), {
+                icon: this._makeHeadingIcon(h),
+                interactive: false,
+                keyboard: false,
+            }).addTo(this.map);
+        }
+    }
+
+// 노드 이동 시 화살표도 같은 위치로 이동
+    updateHeadingPosition(nodeId) {
+        const entry = this.nodes.get(nodeId);
+        if (entry?.headingMarker) {
+            entry.headingMarker.setLatLng(entry.marker.getLatLng());
+        }
+    }
+
 
     async handleNodeDrag(nodeId, newLat, newLng) {
         console.log(`Handling drag for node ${nodeId}: ${newLat}, ${newLng}`);
@@ -487,6 +709,7 @@ class PathMap {
                 nodeInfo.data.GpsInfo.Lat = originalLat;
                 nodeInfo.data.GpsInfo.Long = originalLng;
                 nodeInfo.marker.setLatLng([originalLat, originalLng]);
+                this.updateHeadingPosition(nodeId);
                 
                 // 링크들도 다시 복원
                 this.updateNodeLinks(nodeId);
@@ -552,25 +775,48 @@ class PathMap {
         }
     }
 
+    handleGlobalMouseDown(e) {
+        // 복수 선택 모드에서 드래그 선택 시작
+        if (this.mode === 'select' && e.originalEvent.target === this.map.getContainer()) {
+            this.startSelectionDrag(e);
+        }
+    }
+
     handleGlobalMouseMove(e) {
+        // 노드 드래그 처리
         if (this.isDragging && this.draggedMarker && this.mode === 'drag') {
             // 마커 위치는 즉시 업데이트
             this.draggedMarker.setLatLng(e.latlng);
-            
+            // ⬇ handleGlobalMouseMove 안에 마커 setLatLng 다음 줄에 추가
+            this.updateHeadingPosition(this.draggedNodeId);
+
+            if (this.draggedNodeId) this.updateHeadingPosition(this.draggedNodeId);
+
             // 링크 업데이트는 쓰로틀링 적용 (성능 개선)
             if (this.dragUpdateTimeout) {
                 clearTimeout(this.dragUpdateTimeout);
             }
-            
+
             this.dragUpdateTimeout = setTimeout(() => {
                 if (this.isDragging && this.draggedNodeId) {
                     this.updateNodeLinks(this.draggedNodeId);
                 }
             }, 50); // 50ms마다 한 번씩만 링크 업데이트
         }
+
+        // 드래그 선택 처리
+        if (this.isSelectionDragging) {
+            this.updateSelectionDrag(e);
+        }
     }
 
     handleGlobalMouseUp(e) {
+        // 드래그 선택 종료 처리
+        if (this.isSelectionDragging) {
+            this.endSelectionDrag(e);
+            return;
+        }
+
         if (this.isDragging && this.draggedMarker) {
             console.log('Ending drag for node:', this.draggedNodeId);
             
@@ -607,6 +853,7 @@ class PathMap {
         // 모든 노드 제거
         this.nodes.forEach((nodeInfo) => {
             this.map.removeLayer(nodeInfo.marker);
+            if (nodeInfo.headingMarker) this.map.removeLayer(nodeInfo.headingMarker);
         });
         this.nodes.clear();
 
@@ -637,6 +884,65 @@ class PathMap {
     getSelectedNode() {
         return this.selectedNode ? this.nodes.get(this.selectedNode) : null;
     }
+
+    getSelectedNodeIds() {
+        return Array.from(this.selectedNodes);
+    }
+    getSelectedNodes() {
+        return this.getSelectedNodeIds().map(id => this.nodes.get(id)?.data).filter(Boolean);
+    }
+
+    getMapCenter() {
+        if (!this.map) return null;
+        const center = this.map.getCenter();
+        return {
+            lat: center.lat,
+            lng: center.lng
+        };
+    }
+    clearSelections() {
+        // 상태만 비우는 게 아니라, 시각 스타일도 강제 원복
+        if (this.selectedNode) {
+            this.selectedNode = null;
+        }
+        this.selectedNodes.forEach(id => {
+            // 혹시 남아 있을 수 있는 .selected 방지
+            const el = this.nodes.get(id)?.marker?.getElement();
+            el?.classList.remove('selected');
+        });
+        this.selectedNodes.clear();
+
+        // 전 노드 외형을 NodeType 기준으로 다시 칠함
+        this.refreshAllNodeAppearances();
+
+        // 패널도 비움
+        this.onNodeSelect?.(null, null);
+    }
+
+
+    toggleSelectNode(nodeId) {
+        if (this.selectedNodes.has(nodeId)) {
+            this.selectedNodes.delete(nodeId);
+        } else {
+            this.selectedNodes.add(nodeId);
+        }
+        this.refreshNodeAppearance(nodeId);
+
+        // 패널 갱신
+        if (this.onNodeSelect) {
+            if (this.selectedNodes.size >= 2) {
+                this.onNodeSelect(null, null);
+            } else if (this.selectedNodes.size === 1) {
+                const id = [...this.selectedNodes][0];
+                const nd = this.nodes.get(id)?.data || null;
+                this.onNodeSelect(id, nd);
+            } else {
+                this.onNodeSelect(null, null);
+            }
+        }
+    }
+
+
 
     // --- 구간 노드 생성 관련 함수들 ---
 
@@ -761,5 +1067,268 @@ class PathMap {
         } finally {
             hideLoading();
         }
+    }
+
+    selectOnly(nodeId) {
+        // 기존 선택 전부 해제
+        this.clearSelections();
+
+        // 단일 선택으로 상태 기록
+        this.selectedNode = nodeId;
+        this.selectedNodes.add(nodeId); // 내부적으로는 1개만 유지
+
+        // 외형 적용
+        this.refreshNodeAppearance(nodeId);
+
+        // 패널 갱신
+        if (this.onNodeSelect) {
+            const nd = this.nodes.get(nodeId)?.data || null;
+            this.onNodeSelect(nodeId, nd);
+        }
+    }
+
+
+    isNodeSelected(id) {
+        return this.selectedNodes.has(id) || this.selectedNode === id;
+    }
+
+    // NodeType → 색상 (요구 색상표)
+    nodeTypeToColor(nt) {
+        switch (Number(nt)) {
+            case 1:  return 'rgb(255,0,0)';      // Red
+            case 2:  return 'rgb(0,255,0)';      // Green
+            case 3:  return 'rgb(0,0,255)';      // Blue
+            case 4:  return 'rgb(255,255,0)';    // Yellow
+            case 5:  return 'rgb(255,0,255)';    // Magenta
+            case 6:  return 'rgb(0,255,255)';    // Cyan
+            case 7:  return 'rgb(255,165,0)';    // Orange
+            case 8:  return 'rgb(128,0,128)';    // Purple
+            case 9:  return 'rgb(255,192,203)';  // Pink
+            case 10: return 'rgb(165,42,42)';    // Brown
+            case 11: return 'rgb(128,128,128)';  // Gray
+            default: return 'rgb(0,0,0)';        // Black
+        }
+    }
+
+// 마커의 점(div) 엘리먼트
+    _getNodeDot(nodeId) {
+        const entry = this.nodes.get(nodeId);
+        const el = entry?.marker?.getElement();
+        return el ? el.querySelector('div') : null;
+    }
+
+// 선택/해제 외형 적용(밝기 1.5배 + 테두리 5배)
+    _applySelectVisual(nodeId, selected) {
+        const entry = this.nodes.get(nodeId);
+        const dot = this._getNodeDot(nodeId);
+        if (!entry || !dot) return;
+
+        // 기본색(항상 NodeType 기준으로 다시 칠함)
+        dot.style.backgroundColor = this.nodeTypeToColor(entry.data?.NodeType);
+        dot.style.filter       = selected ? 'brightness(1.5)' : '';
+        dot.style.border       = selected ? '10px solid white' : '2px solid white';
+
+        // 혹시 남아 있을지도 모를 .selected 클래스는 항상 제거(충돌 예방)
+        const root = entry.marker.getElement();
+        root?.classList.remove('selected');
+    }
+
+
+// 단일 노드 외형 새로고침
+    refreshNodeAppearance(nodeId) {
+        this._applySelectVisual(nodeId, this.isNodeSelected(nodeId));
+    }
+
+// 전 노드 새로고침
+    refreshAllNodeAppearances() {
+        this.nodes.forEach((_, id) => this.refreshNodeAppearance(id));
+    }
+
+    // 드래그 선택 시작
+    startSelectionDrag(e) {
+        // 노드나 마커를 클릭한 경우는 선택 드래그를 시작하지 않음
+        if (e.originalEvent.target.closest('.leaflet-marker-icon')) {
+            return;
+        }
+
+        this.isSelectionDragging = true;
+        this.selectionStartLatLng = e.latlng;
+        this.selectionStartPoint = this.map.latLngToContainerPoint(e.latlng);
+
+        // 지도 드래그 비활성화
+        this.map.dragging.disable();
+
+        // 선택 사각형 생성
+        this.createSelectionRectangle();
+
+        // 이벤트 전파 방지
+        L.DomEvent.stopPropagation(e.originalEvent);
+        L.DomEvent.preventDefault(e.originalEvent);
+    }
+
+    // 드래그 선택 업데이트
+    updateSelectionDrag(e) {
+        if (!this.isSelectionDragging || !this.selectionStartLatLng) {
+            return;
+        }
+
+        const currentPoint = this.map.latLngToContainerPoint(e.latlng);
+        const startPoint = this.selectionStartPoint;
+
+        // 선택 사각형 업데이트
+        const bounds = L.latLngBounds([
+            this.selectionStartLatLng,
+            e.latlng
+        ]);
+
+        if (this.selectionRectangle) {
+            this.selectionRectangle.setBounds(bounds);
+        }
+
+        // 실시간으로 선택 범위 내 노드들 하이라이트
+        this.highlightNodesInBounds(bounds);
+    }
+
+    // 드래그 선택 종료
+    endSelectionDrag(e) {
+        if (!this.isSelectionDragging) {
+            return;
+        }
+
+        const bounds = L.latLngBounds([
+            this.selectionStartLatLng,
+            e.latlng
+        ]);
+
+        // 선택 범위 내 노드들 실제 선택
+        this.selectNodesInBounds(bounds);
+
+        // 정리
+        this.cleanupSelectionDrag();
+    }
+
+    // 선택 사각형 생성
+    createSelectionRectangle() {
+        if (this.selectionRectangle) {
+            this.map.removeLayer(this.selectionRectangle);
+        }
+
+        this.selectionRectangle = L.rectangle(
+            L.latLngBounds([this.selectionStartLatLng, this.selectionStartLatLng]),
+            {
+                color: '#3498db',
+                weight: 2,
+                fillColor: '#3498db',
+                fillOpacity: 0.1,
+                dashArray: '5, 5'
+            }
+        ).addTo(this.map);
+    }
+
+    // 범위 내 노드들 하이라이트
+    highlightNodesInBounds(bounds) {
+        this.nodes.forEach((nodeInfo, nodeId) => {
+            const nodeLatLng = nodeInfo.marker.getLatLng();
+            const isInBounds = bounds.contains(nodeLatLng);
+
+            // 임시 하이라이트 스타일 적용
+            const element = nodeInfo.marker.getElement();
+            if (element) {
+                if (isInBounds) {
+                    element.style.border = '3px solid #e74c3c';
+                    element.style.boxShadow = '0 0 10px rgba(231, 76, 60, 0.5)';
+                } else {
+                    // 원래 스타일로 복원 (기존 선택된 것은 유지)
+                    if (this.selectedNodes.has(nodeId)) {
+                        element.style.border = '3px solid #e74c3c';
+                        element.style.boxShadow = '0 0 10px rgba(231, 76, 60, 0.8)';
+                    } else {
+                        element.style.border = '2px solid white';
+                        element.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+                    }
+                }
+            }
+        });
+    }
+
+    // 범위 내 노드들 선택
+    selectNodesInBounds(bounds) {
+        // 기존 선택 해제 (Ctrl 키가 눌리지 않은 경우)
+        if (!this.isCtrlPressed) {
+            this.clearSelections();
+        }
+
+        let selectedCount = 0;
+        this.nodes.forEach((nodeInfo, nodeId) => {
+            const nodeLatLng = nodeInfo.marker.getLatLng();
+            if (bounds.contains(nodeLatLng)) {
+                this.selectedNodes.add(nodeId);
+                selectedCount++;
+            }
+        });
+
+        // 모든 노드 외형 새로고침
+        this.refreshAllNodeAppearances();
+
+        // 선택 콜백 호출
+        if (this.onNodeSelect) {
+            if (this.selectedNodes.size >= 2) {
+                this.onNodeSelect(null, null);
+            } else if (this.selectedNodes.size === 1) {
+                const id = [...this.selectedNodes][0];
+                const nd = this.nodes.get(id)?.data || null;
+                this.onNodeSelect(id, nd);
+            } else {
+                this.onNodeSelect(null, null);
+            }
+        }
+
+        // 알림 표시
+        if (selectedCount > 0) {
+            showNotification(`${selectedCount}개 노드가 선택되었습니다`, 'info');
+        }
+    }
+
+    // 드래그 선택 정리
+    cleanupSelectionDrag() {
+        this.isSelectionDragging = false;
+        this.selectionStartPoint = null;
+        this.selectionStartLatLng = null;
+
+        // 선택 사각형 제거
+        if (this.selectionRectangle) {
+            this.map.removeLayer(this.selectionRectangle);
+            this.selectionRectangle = null;
+        }
+
+        // 지도 드래그 재활성화
+        this.map.dragging.enable();
+    }
+
+    // Ctrl 키 상태 감지 (다중 선택용)
+    get isCtrlPressed() {
+        return this.ctrlPressed || false;
+    }
+
+    // 키보드 이벤트 리스너 설정
+    setupKeyboardListeners() {
+        this.ctrlPressed = false;
+
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                this.ctrlPressed = true;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (!e.ctrlKey && !e.metaKey) {
+                this.ctrlPressed = false;
+            }
+        });
+
+        // 윈도우 포커스가 벗어났을 때 Ctrl 상태 초기화
+        window.addEventListener('blur', () => {
+            this.ctrlPressed = false;
+        });
     }
 }

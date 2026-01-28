@@ -25,6 +25,7 @@ class Node(BaseModel):
     Remark: str = ""
     HistType: str = "02A"
     HistRemark: str = ""
+    Heading: float = -1.0
     GpsInfo: GpsInfo
     UtmInfo: UtmInfo
 
@@ -67,6 +68,7 @@ class NodeCreate(BaseModel):
     Remark: str = ""
     HistType: str = "02A"
     HistRemark: str = ""
+    Heading: float = -1.0
     GpsInfo: GpsInfo
     UtmInfo: UtmInfo
 
@@ -103,6 +105,7 @@ class NodeUpdate(BaseModel):
     Remark: Optional[str] = None
     HistType: Optional[str] = None
     HistRemark: Optional[str] = None
+    Heading: Optional[float] = None
     GpsInfo: Optional[GpsInfo] = None
     UtmInfo: Optional[UtmInfo] = None
 
@@ -127,3 +130,28 @@ class LinkUpdate(BaseModel):
     Remark: Optional[str] = None
     HistType: Optional[str] = None
     HistRemark: Optional[str] = None
+
+
+class CutNodesRequest(BaseModel):
+    node_ids: List[str]
+
+
+class PasteNodesRequest(BaseModel):
+    center_lat: float
+    center_lon: float
+
+
+class CutNodesResponse(BaseModel):
+    message: str
+    cut_nodes: List[Node]
+    cut_links: List[Link]
+    total_cut_nodes: int
+    total_cut_links: int
+
+
+class PasteNodesResponse(BaseModel):
+    message: str
+    pasted_nodes: List[Node]
+    pasted_links: List[Link]
+    total_pasted_nodes: int
+    total_pasted_links: int
