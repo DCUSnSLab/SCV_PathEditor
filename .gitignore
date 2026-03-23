@@ -18,3 +18,7 @@ venv/
 *.json
 
 */__pycache__/
+*.db3
+*.npy
+*.bin
+*.yaml

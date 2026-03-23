@@ -5,6 +5,8 @@ import os
 
 from app.api.path_api import router as path_router
 from app.api.coords_api import router as coords_router
+from app.api.semantic_api import router as semantic_router
+from app.api.lidar_api import router as lidar_router
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -25,6 +27,8 @@ app.add_middleware(
 # API 라우터 등록
 app.include_router(path_router)
 app.include_router(coords_router)
+app.include_router(semantic_router)
+app.include_router(lidar_router)
 
 # 정적 파일 서빙 (프론트엔드)
 frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
@@ -38,10 +42,11 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=True,
         reload_dirs=["app"]
     )

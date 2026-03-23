@@ -1,0 +1,540 @@
+/* Point Cloud Editor Styles */
+
+/* Layout */
+.pc-layout {
+    display: flex;
+    height: calc(100vh - 60px);
+    overflow: hidden;
+}
+
+.pc-left-panel {
+    width: 280px;
+    min-width: 280px;
+    overflow-y: auto;
+    background: #f5f5f5;
+    border-right: 1px solid #ddd;
+    padding: 10px;
+}
+
+.pc-center-panel {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #1a1a2e;
+}
+
+.pc-right-panel {
+    width: 280px;
+    min-width: 280px;
+    overflow-y: auto;
+    background: #f5f5f5;
+    border-left: 1px solid #ddd;
+    padding: 10px;
+}
+
+/* Three.js Container */
+.three-container {
+    width: 100%;
+    height: 100%;
+}
+
+.coordinate-display {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+    z-index: 100;
+}
+
+/* Selection Canvas */
+.selection-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 50;
+}
+
+/* Control Sections */
+.control-section {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.control-section .big-text {
+    margin: 0 0 10px 0;
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+}
+
+/* Status Text */
+.status-text {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 10px;
+    padding: 5px;
+    background: #f9f9f9;
+    border-radius: 4px;
+}
+
+/* Form Controls */
+.form-group {
+    margin-bottom: 10px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 12px;
+    color: #555;
+    margin-bottom: 4px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.form-range {
+    width: 100%;
+    margin: 0;
+}
+
+/* Buttons */
+.btn {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.2s;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: #3498db;
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #2980b9;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #5a6268;
+}
+
+.btn-block {
+    width: 100%;
+    display: block;
+}
+
+.btn-small {
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
+.btn-mode {
+    background: #e9ecef;
+    color: #333;
+    border: 1px solid #ced4da;
+}
+
+.btn-mode:hover:not(:disabled) {
+    background: #dee2e6;
+}
+
+.btn-mode.active {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
+}
+
+/* View/Selection Buttons */
+.view-buttons,
+.selection-buttons,
+.history-buttons {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.view-buttons .btn,
+.selection-buttons .btn,
+.history-buttons .btn {
+    flex: 1;
+}
+
+/* Area Type Buttons */
+.area-type-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.btn-area-type {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-area-type:hover {
+    background: #e9ecef;
+}
+
+.btn-area-type.active {
+    background: #e3f2fd;
+    border-color: #2196f3;
+}
+
+.color-indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+/* Offset Inputs */
+.offset-inputs {
+    display: flex;
+    gap: 10px;
+}
+
+.offset-inputs .form-group {
+    flex: 1;
+}
+
+/* Bag/PC List */
+.bag-list-container,
+.pc-list-container {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.bag-list-container select,
+.pc-list-container select {
+    flex: 1;
+}
+
+/* Progress */
+.progress-container {
+    margin-top: 10px;
+}
+
+.progress-bar {
+    height: 8px;
+    background: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #3498db;
+    transition: width 0.3s;
+}
+
+.progress-text {
+    font-size: 11px;
+    color: #666;
+    margin-top: 5px;
+    text-align: center;
+}
+
+/* Selection Options */
+.selection-options {
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.selection-options label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+
+/* Stats Panel */
+.stats-panel {
+    font-size: 13px;
+}
+
+.stat-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.stat-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.stat-name {
+    flex: 1;
+}
+
+.stat-value {
+    font-weight: 500;
+    color: #333;
+    min-width: 50px;
+    text-align: right;
+}
+
+/* Info Panel */
+.info-panel {
+    font-size: 13px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+}
+
+.info-label {
+    color: #666;
+}
+
+.info-value {
+    font-weight: 500;
+    color: #333;
+}
+
+/* Polygon Panel */
+.polygon-panel {
+    font-size: 13px;
+}
+
+.polygon-preview {
+    margin-top: 10px;
+    padding: 10px;
+    background: #f9f9f9;
+    border-radius: 4px;
+}
+
+.preview-title {
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.polygon-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+}
+
+/* Export Panel */
+.export-panel {
+    font-size: 13px;
+}
+
+/* Details/Summary */
+details {
+    margin-bottom: 10px;
+}
+
+summary {
+    cursor: pointer;
+    padding: 8px 0;
+    font-weight: 500;
+    user-select: none;
+}
+
+summary:hover {
+    color: #3498db;
+}
+
+/* Modal - extends styles.css */
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+}
+
+.modal-close:hover {
+    color: #333;
+}
+
+/* Upload Area */
+.upload-area {
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.upload-area:hover,
+.upload-area.dragover {
+    border-color: #3498db;
+    background: #f8f9fa;
+}
+
+.upload-area p {
+    margin: 5px 0;
+    color: #666;
+}
+
+.upload-progress {
+    text-align: center;
+}
+
+/* Table Section (Right Panel) */
+.table-section {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.table-section hr {
+    border: none;
+    border-top: 1px solid #eee;
+    margin: 8px 0;
+}
+
+/* Header Styles */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background: #2c3e50;
+    color: white;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.header-left h1 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.back-link {
+    color: #bdc3c7;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.back-link:hover {
+    color: white;
+}
+
+.header-controls {
+    display: flex;
+    gap: 10px;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .pc-left-panel,
+    .pc-right-panel {
+        width: 240px;
+        min-width: 240px;
+    }
+}
+
+@media (max-width: 900px) {
+    .pc-layout {
+        flex-direction: column;
+    }
+
+    .pc-left-panel,
+    .pc-right-panel {
+        width: 100%;
+        min-width: auto;
+        max-height: 200px;
+    }
+
+    .pc-center-panel {
+        height: 400px;
+    }
+}
+
+/* Frame Navigation */
+.frame-nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.frame-nav-controls .btn {
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+.frame-counter {
+    flex: 1;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+}
+
+.frame-hint {
+    text-align: center;
+    color: #888;
+    margin-bottom: 10px;
+}
+
+.frame-hint small {
+    font-size: 11px;
+}
+
+#frameSlider {
+    width: 100%;
+    cursor: pointer;
+}

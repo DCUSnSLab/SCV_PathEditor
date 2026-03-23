@@ -1,0 +1,266 @@
+/* Semantic Map Editor Styles */
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.back-link {
+    color: #ecf0f1;
+    text-decoration: none;
+    font-size: 0.9rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.back-link:hover {
+    background-color: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.5);
+}
+
+/* Area Type Selector */
+.area-type-selector {
+    margin-bottom: 1rem;
+}
+
+.area-type-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.btn-area-type {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.8rem;
+    background-color: #f8f9fa;
+    border: 2px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.btn-area-type:hover {
+    background-color: #e9ecef;
+}
+
+.btn-area-type.active {
+    border-color: #3498db;
+    background-color: #e3f2fd;
+}
+
+.color-indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+/* Draw Buttons */
+.draw-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.draw-buttons .btn-mode span {
+    margin-right: 0.5rem;
+}
+
+/* Property Panel */
+.property-panel {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+
+.property-panel .property-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.property-panel .property-row label {
+    color: #6c757d;
+}
+
+.property-panel .property-row span {
+    font-weight: 500;
+    color: #2c3e50;
+}
+
+.property-panel .property-actions {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Legend Panel */
+.legend-panel {
+    padding: 0.5rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0;
+    font-size: 0.85rem;
+}
+
+.legend-color {
+    width: 20px;
+    height: 12px;
+    border-radius: 2px;
+    border: 1px solid rgba(0,0,0,0.2);
+}
+
+/* Area Table Styles */
+#areaTable tbody tr {
+    cursor: pointer;
+}
+
+#areaTable tbody tr:hover {
+    background-color: #e3f2fd;
+}
+
+#areaTable tbody tr.selected {
+    background-color: #bbdefb;
+}
+
+.area-type-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: white;
+}
+
+.area-type-badge.drivable { background-color: #4CAF50; }
+.area-type-badge.crosswalk { background-color: #FF9800; }
+.area-type-badge.sidewalk { background-color: #9E9E9E; }
+.area-type-badge.no_entry { background-color: #F44336; }
+.area-type-badge.plaza { background-color: #2196F3; }
+
+/* Leaflet Draw Customization */
+.leaflet-draw-toolbar a {
+    background-color: #2c3e50;
+}
+
+.leaflet-draw-toolbar a:hover {
+    background-color: #34495e;
+}
+
+/* Selected Polygon Style */
+.leaflet-interactive.selected-polygon {
+    stroke-width: 4 !important;
+    stroke-dasharray: 5, 5 !important;
+}
+
+/* Map Info */
+#mapInfo p {
+    margin: 0.4rem 0;
+    font-size: 0.9rem;
+}
+
+/* Coordinate Display */
+.coordinate-display {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(255,255,255,0.9);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-family: monospace;
+    z-index: 1000;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Notification Toast */
+.notification {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    padding: 1rem 1.5rem;
+    border-radius: 4px;
+    color: white;
+    font-size: 0.9rem;
+    z-index: 10000;
+    animation: slideIn 0.3s ease;
+    max-width: 400px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.notification.success {
+    background-color: #27ae60;
+}
+
+.notification.error {
+    background-color: #e74c3c;
+}
+
+.notification.info {
+    background-color: #3498db;
+}
+
+.notification.warning {
+    background-color: #f39c12;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* File Tree for Semantic Maps */
+.file-tree .file-item.semantic-map {
+    color: #2196F3;
+}
+
+.file-tree .file-item.semantic-map .file-icon::before {
+    content: "🗺️";
+}
+
+/* Polygon Tooltip */
+.area-tooltip {
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 0.3rem 0.6rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    border: none;
+    box-shadow: none;
+}
+
+.area-tooltip::before {
+    display: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    .area-type-buttons {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .btn-area-type {
+        flex: 1 1 45%;
+    }
+}

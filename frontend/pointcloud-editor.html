@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Point Cloud Labeling Tool - SCV Path Editor</title>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "./js/lib/three.module.js",
+            "three/addons/controls/OrbitControls.js": "./js/lib/OrbitControls.js"
+        }
+    }
+    </script>
+
+    <script src="js/lib/proj4.js"></script>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/pointcloud.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <a href="index.html" class="back-link">Path Editor</a>
+                <a href="semantic-editor.html" class="back-link">Semantic Editor</a>
+                <h1>Point Cloud Labeling Tool</h1>
+            </div>
+            <div class="header-controls">
+                <button id="uploadBagBtn" class="btn btn-primary">Upload Bag</button>
+                <button id="exportBtn" class="btn btn-primary" disabled>Export</button>
+            </div>
+        </header>
+
+        <div class="main-content pc-layout">
+            <!-- Left Panel - Tools -->
+            <div class="left-panel pc-left-panel">
+                <!-- Bag Section -->
+                <div class="control-section">
+                    <p class="big-text">ROS2 Bag</p>
+                    <div id="bagStatus" class="status-text">No bag loaded</div>
+
+                    <div class="bag-list-container">
+                        <select id="bagSelect" class="form-control">
+                            <option value="">-- Select Bag --</option>
+                        </select>
+                        <button id="refreshBagsBtn" class="btn btn-secondary btn-small">Refresh</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label>LiDAR Topic:</label>
+                        <input type="text" id="lidarTopic" class="form-control" value="/velodyne_points">
+                    </div>
+                    <div class="form-group">
+                        <label>GPS Topic:</label>
+                        <input type="text" id="gpsTopic" class="form-control" value="/ublox_gps_node/fix">
+                    </div>
+                    <div class="form-group">
+                        <label>Odom Topic:</label>
+                        <input type="text" id="odomTopic" class="form-control" value="">
+                    </div>
+
+                    <div class="offset-inputs">
+                        <div class="form-group">
+                            <label>Offset X (m):</label>
+                            <input type="number" id="offsetX" class="form-control" value="0" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label>Offset Y (m):</label>
+                            <input type="number" id="offsetY" class="form-control" value="0" step="0.01">
+                        </div>
+                    </div>
+
+                    <button id="processBtn" class="btn btn-primary btn-block" disabled>Process Bag</button>
+
+                    <div id="processProgress" class="progress-container" style="display:none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-text">Processing...</div>
+                    </div>
+                </div>
+
+                <!-- Point Cloud Section -->
+                <div class="control-section">
+                    <p class="big-text">Point Cloud</p>
+                    <div class="pc-list-container">
+                        <select id="pcSelect" class="form-control">
+                            <option value="">-- Select Point Cloud --</option>
+                        </select>
+                        <button id="refreshPcBtn" class="btn btn-secondary btn-small">Refresh</button>
+                    </div>
+                    <button id="loadPcBtn" class="btn btn-secondary btn-block" disabled>Load Point Cloud</button>
+                </div>
+
+                <!-- Frame Navigation (shown for frame-based point clouds) -->
+                <div class="control-section" id="frameNavigation" style="display: none;">
+                    <p class="big-text">Frame Navigation</p>
+                    <div class="frame-nav-controls">
+                        <button id="prevFrameBtn" class="btn btn-mode" disabled>&lt; Prev</button>
+                        <span id="frameCounter" class="frame-counter">Frame 0 / 0</span>
+                        <button id="nextFrameBtn" class="btn btn-mode" disabled>Next &gt;</button>
+                    </div>
+                    <div class="form-group">
+                        <input type="range" id="frameSlider" class="form-range" min="0" max="0" value="0">
+                    </div>
+                    <div class="frame-hint">
+                        <small>Use Arrow Keys (← →) to navigate frames</small>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="framePreviewToggle"> Frame Preview Only
+                        </label>
+                    </div>
+                    <button id="mergeFramesBtn" class="btn btn-secondary btn-block">Merge All Frames</button>
+                </div>
+
+                <!-- View Controls -->
+                <div class="control-section">
+                    <p class="big-text">View Controls</p>
+                    <div class="view-buttons">
+                        <button id="view3DBtn" class="btn btn-mode active">3D View</button>
+                        <button id="viewBEVBtn" class="btn btn-mode">BEV</button>
+                    </div>
+                    <div class="form-group">
+                        <label>Point Size: <span id="pointSizeValue">2.0</span></label>
+                        <input type="range" id="pointSize" class="form-range" min="0.1" max="10" value="2.0" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Color Mode:</label>
+                        <select id="colorMode" class="form-control">
+                            <option value="height">Height</option>
+                            <option value="label">Label</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="showGrid" checked> Show Grid
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="showMapTiles"> Show Map Tiles
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Selection Tools -->
+                <div class="control-section">
+                    <p class="big-text">Selection Tools</p>
+                    <div class="selection-buttons">
+                        <button id="boxSelectBtn" class="btn btn-mode">Box Select</button>
+                        <button id="lassoSelectBtn" class="btn btn-mode">Lasso</button>
+                    </div>
+                    <div class="selection-options">
+                        <label>
+                            <input type="checkbox" id="additiveSelect"> Additive (Shift)
+                        </label>
+                    </div>
+                    <button id="clearSelectionBtn" class="btn btn-secondary btn-block">Clear Selection</button>
+                </div>
+
+                <!-- Area Type -->
+                <div class="control-section">
+                    <p class="big-text">Area Type</p>
+                    <div class="area-type-buttons">
+                        <button class="btn btn-area-type active" data-type="drivable">
+                            <span class="color-indicator" style="background:#4CAF50;"></span>
+                            Drivable
+                        </button>
+                        <button class="btn btn-area-type" data-type="crosswalk">
+                            <span class="color-indicator" style="background:#FF9800;"></span>
+                            Crosswalk
+                        </button>
+                        <button class="btn btn-area-type" data-type="sidewalk">
+                            <span class="color-indicator" style="background:#9E9E9E;"></span>
+                            Sidewalk
+                        </button>
+                        <button class="btn btn-area-type" data-type="no_entry">
+                            <span class="color-indicator" style="background:#F44336;"></span>
+                            No Entry
+                        </button>
+                        <button class="btn btn-area-type" data-type="plaza">
+                            <span class="color-indicator" style="background:#2196F3;"></span>
+                            Plaza
+                        </button>
+                    </div>
+                    <button id="assignLabelBtn" class="btn btn-primary btn-block" disabled>Assign Label</button>
+                </div>
+
+                <!-- History -->
+                <div class="control-section">
+                    <p class="big-text">History</p>
+                    <div class="history-buttons">
+                        <button id="undoBtn" class="btn btn-mode" disabled>Undo</button>
+                        <button id="redoBtn" class="btn btn-mode" disabled>Redo</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center Panel - 3D View -->
+            <div class="center-panel pc-center-panel">
+                <div id="threeContainer" class="three-container"></div>
+                <div id="coordDisplay" class="coordinate-display">X: -- Y: -- Z: --</div>
+
+                <!-- Selection overlay -->
+                <canvas id="selectionCanvas" class="selection-canvas"></canvas>
+            </div>
+
+            <!-- Right Panel - Stats -->
+            <div class="right-panel pc-right-panel">
+                <!-- Label Statistics -->
+                <div class="table-section">
+                    <details open>
+                        <summary>Label Statistics</summary>
+                        <div id="labelStats" class="stats-panel">
+                            <div class="stat-row">
+                                <span class="stat-color" style="background:#4CAF50;"></span>
+                                <span class="stat-name">Drivable</span>
+                                <span class="stat-value" id="stat-drivable">0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-color" style="background:#FF9800;"></span>
+                                <span class="stat-name">Crosswalk</span>
+                                <span class="stat-value" id="stat-crosswalk">0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-color" style="background:#9E9E9E;"></span>
+                                <span class="stat-name">Sidewalk</span>
+                                <span class="stat-value" id="stat-sidewalk">0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-color" style="background:#F44336;"></span>
+                                <span class="stat-name">No Entry</span>
+                                <span class="stat-value" id="stat-no_entry">0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-color" style="background:#2196F3;"></span>
+                                <span class="stat-name">Plaza</span>
+                                <span class="stat-value" id="stat-plaza">0</span>
+                            </div>
+                            <hr>
+                            <div class="stat-row">
+                                <span class="stat-name"><strong>Total Labeled</strong></span>
+                                <span class="stat-value" id="stat-total">0</span>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- Point Cloud Info -->
+                <div class="table-section">
+                    <details open>
+                        <summary>Point Cloud Info</summary>
+                        <div id="pcInfo" class="info-panel">
+                            <div class="info-row">
+                                <span class="info-label">Total Points:</span>
+                                <span class="info-value" id="info-total">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Displayed:</span>
+                                <span class="info-value" id="info-displayed">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Selected:</span>
+                                <span class="info-value" id="info-selected">0</span>
+                            </div>
+                            <hr>
+                            <div class="info-row">
+                                <span class="info-label">Origin Lat:</span>
+                                <span class="info-value" id="info-lat">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Origin Lng:</span>
+                                <span class="info-value" id="info-lng">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">UTM Zone:</span>
+                                <span class="info-value" id="info-zone">--</span>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- Polygon Generation -->
+                <div class="table-section">
+                    <details>
+                        <summary>Polygon Generation</summary>
+                        <div class="polygon-panel">
+                            <div class="form-group">
+                                <label>Alpha (m):</label>
+                                <input type="number" id="alphaParam" class="form-control" value="2.0" step="0.5" min="0.5">
+                            </div>
+                            <div class="form-group">
+                                <label>Simplify (m):</label>
+                                <input type="number" id="simplifyParam" class="form-control" value="0.5" step="0.1" min="0.1">
+                            </div>
+                            <button id="generatePolygonsBtn" class="btn btn-secondary btn-block" disabled>Generate Polygons</button>
+
+                            <div id="polygonPreview" class="polygon-preview" style="display:none;">
+                                <p class="preview-title">Generated Polygons:</p>
+                                <div id="polygonList"></div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- Export -->
+                <div class="table-section">
+                    <details>
+                        <summary>Export</summary>
+                        <div class="export-panel">
+                            <div class="form-group">
+                                <label>Map Name:</label>
+                                <input type="text" id="exportMapName" class="form-control" placeholder="My HD Map">
+                            </div>
+                            <div class="form-group">
+                                <label>Filename:</label>
+                                <input type="text" id="exportFilename" class="form-control" placeholder="my_map.json">
+                            </div>
+                            <button id="exportSemanticBtn" class="btn btn-primary btn-block" disabled>Export to Semantic Map</button>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="uploadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Upload ROS2 Bag</h3>
+                <button class="modal-close" id="closeUploadModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="upload-area" id="uploadArea">
+                    <p>Drag & drop a .db3 or .zip file here</p>
+                    <p>or</p>
+                    <input type="file" id="bagFileInput" accept=".db3,.zip" style="display:none;">
+                    <button id="selectFileBtn" class="btn btn-secondary">Select File</button>
+                </div>
+                <div id="uploadProgress" class="upload-progress" style="display:none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-text">Uploading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts (ES6 Modules) -->
+    <script type="module" src="js/pointcloud-main.js"></script>
+</body>
+</html>

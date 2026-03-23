@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semantic Map Editor</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet Draw CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/semantic.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <a href="index.html" class="back-link">&larr; Path Editor</a>
+                <a href="pointcloud-editor.html" class="back-link">Point Cloud Labeling</a>
+                <h1>Semantic Map Editor</h1>
+            </div>
+            <div class="header-controls">
+                <button id="loadBtn" class="btn btn-primary">Open</button>
+                <button id="saveBtn" class="btn btn-primary">Save</button>
+                <button id="exportBtn" class="btn btn-secondary">Export JSON</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel - Tools -->
+            <div class="left-panel">
+                <div class="control-section">
+                    <p class="big-text">Map Style</p>
+                    <select id="mapStyleSelect" class="form-control" style="width:100%;">
+                        <option value="street" selected>Street</option>
+                        <option value="satellite">Satellite (Google)</option>
+                        <option value="hybrid">Hybrid (Google)</option>
+                        <option value="dark">Dark Mode</option>
+                    </select>
+                </div>
+
+                <div class="control-section">
+                    <p class="big-text">Draw Tools</p>
+                    <div class="area-type-selector">
+                        <p class="middle-text">Area Type</p>
+                        <div class="area-type-buttons">
+                            <button class="btn btn-area-type active" data-type="drivable">
+                                <span class="color-indicator" style="background:#4CAF50;"></span>
+                                Drivable
+                            </button>
+                            <button class="btn btn-area-type" data-type="crosswalk">
+                                <span class="color-indicator" style="background:#FF9800;"></span>
+                                Crosswalk
+                            </button>
+                            <button class="btn btn-area-type" data-type="sidewalk">
+                                <span class="color-indicator" style="background:#9E9E9E;"></span>
+                                Sidewalk
+                            </button>
+                            <button class="btn btn-area-type" data-type="no_entry">
+                                <span class="color-indicator" style="background:#F44336;"></span>
+                                No Entry
+                            </button>
+                            <button class="btn btn-area-type" data-type="plaza">
+                                <span class="color-indicator" style="background:#2196F3;"></span>
+                                Plaza
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="draw-buttons">
+                        <button id="drawPolygonBtn" class="btn btn-mode">
+                            <span>&#9634;</span> Draw Polygon
+                        </button>
+                        <button id="editModeBtn" class="btn btn-mode">
+                            <span>&#9998;</span> Edit Mode
+                        </button>
+                        <button id="deleteModeBtn" class="btn btn-mode">
+                            <span>&#10006;</span> Delete Mode
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <p class="big-text">Area Properties</p>
+                    <div id="areaProperties" class="property-panel">
+                        <p class="text-muted">Select an area to edit properties</p>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <p class="big-text">File Explorer</p>
+                    <div class="file-explorer">
+                        <div class="file-explorer-header">
+                            <button id="refreshFiles" class="btn-icon" title="Refresh">
+                                <span>Refresh</span>
+                            </button>
+                            <button id="downloadFileBtn" class="btn-icon" title="Download selected file">
+                                <span>Download</span>
+                            </button>
+                        </div>
+                        <div class="file-tree" id="fileTree">
+                            <div class="file-item loading">
+                                <span class="file-icon">&#9203;</span>
+                                <span class="file-name">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center Panel - Map -->
+            <div class="center-panel">
+                <div id="map" class="map-container"></div>
+            </div>
+
+            <!-- Right Panel - Area List -->
+            <div class="right-panel" id="right-pn">
+                <div class="table-section">
+                    <details open>
+                        <summary>Areas (<span id="areaCount">0</span>)</summary>
+                        <div class="table-container">
+                            <table id="areaTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Type</th>
+                                        <th>Speed</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </details>
+
+                    <details open>
+                        <summary>Map Info</summary>
+                        <div class="control-section">
+                            <div id="mapInfo">
+                                <p><strong>Name:</strong> <span id="mapName">Untitled</span></p>
+                                <p><strong>Coordinate:</strong> <span id="mapCoordSystem">UTM</span></p>
+                                <p><strong>Areas:</strong> <span id="totalAreas">0</span></p>
+                            </div>
+                        </div>
+                    </details>
+
+                    <details open>
+                        <summary>Legend</summary>
+                        <div class="legend-panel">
+                            <div class="legend-item">
+                                <span class="legend-color" style="background:#4CAF50;"></span>
+                                <span>Drivable Area</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background:#FF9800;"></span>
+                                <span>Crosswalk</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background:#9E9E9E;"></span>
+                                <span>Sidewalk</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background:#F44336;"></span>
+                                <span>No Entry</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color" style="background:#2196F3;"></span>
+                                <span>Plaza</span>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Modal -->
+    <div id="saveModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Save Semantic Map</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="saveForm">
+                    <div class="form-group">
+                        <label>Map Name:</label>
+                        <input type="text" id="saveMapName" placeholder="my_semantic_map">
+                    </div>
+                    <div class="form-group">
+                        <label>Filename:</label>
+                        <input type="text" id="saveFilename" placeholder="my_semantic_map.json">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="confirmSaveBtn" class="btn btn-primary">Save</button>
+                <button type="button" id="cancelSaveBtn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Area Edit Modal -->
+    <div id="areaEditModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Area Properties</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="areaEditForm">
+                    <div class="form-group">
+                        <label>Area ID:</label>
+                        <input type="text" id="editAreaId" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Type:</label>
+                        <select id="editAreaType" class="form-control">
+                            <option value="drivable">Drivable</option>
+                            <option value="crosswalk">Crosswalk</option>
+                            <option value="sidewalk">Sidewalk</option>
+                            <option value="no_entry">No Entry</option>
+                            <option value="plaza">Plaza</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Speed Limit (m/s):</label>
+                        <input type="number" id="editSpeedLimit" step="0.1" min="0" max="10">
+                    </div>
+                    <div class="form-group">
+                        <label>Priority:</label>
+                        <input type="number" id="editPriority" step="1" min="1" max="10">
+                    </div>
+                    <div class="form-group">
+                        <label>Remark:</label>
+                        <input type="text" id="editRemark" placeholder="Optional description">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="applyAreaEditBtn" class="btn btn-primary">Apply</button>
+                <button type="button" id="cancelAreaEditBtn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loading" class="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>Processing...</p>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="js/semantic-api.js"></script>
+    <script src="js/semantic-map.js"></script>
+    <script src="js/semantic-app.js"></script>
+</body>
+</html>
