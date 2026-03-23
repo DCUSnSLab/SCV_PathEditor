@@ -1,7 +1,17 @@
 // API client for SCV Path Editor Web
+function getAppBasePath() {
+    const { pathname } = window.location;
+    return pathname === '/map' || pathname.startsWith('/map/') ? '/map' : '';
+}
+
+function buildAppUrl(path) {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `${getAppBasePath()}${normalizedPath}`;
+}
 class PathAPI {
-    constructor(baseUrl = '/api/path') {
+    constructor(baseUrl = buildAppUrl('/api/path')) {
         this.baseUrl = baseUrl;
+        this.coordsBaseUrl = buildAppUrl('/api/coords');
     }
 
     async request(url, options = {}) {
@@ -397,7 +407,7 @@ class PathAPI {
     // 좌표 변환 API
     async latLngToUtm(lat, lng) {
         // 이 함수는 /api/coords 접두사를 사용하므로 this.request를 직접 사용하지 않음
-        const response = await fetch('/api/coords/latlng-to-utm', {
+        const response = await fetch(`${this.coordsBaseUrl}/latlng-to-utm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lat, lng })
@@ -410,7 +420,7 @@ class PathAPI {
     }
 
     async utmToLatLng(easting, northing, zone_number, zone_letter) {
-        const response = await fetch('/api/coords/utm-to-latlng', {
+        const response = await fetch(`${this.coordsBaseUrl}/utm-to-latlng`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ easting, northing, zone_number, zone_letter })

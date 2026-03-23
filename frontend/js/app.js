@@ -212,7 +212,7 @@ window.debug = {
     // API 헬스 체크
     healthCheck: async () => {
         try {
-            const response = await fetch('/health');
+            const response = await fetch(buildAppUrl('/health'));
             return await response.json();
         } catch (error) {
             return { error: error.message };
