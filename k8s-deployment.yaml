@@ -1,34 +1,22 @@
-# ------------------- Persistent Volume (PV) ------------------- #
-# Note: This PV uses hostPath, which is suitable for single-node clusters (like Minikube) or testing.
-# For a production cloud environment (GKE, EKS, AKS), you should use a provider-specific
-# volume type like 'gcePersistentDisk', 'awsElasticBlockStore', or a StorageClass.
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: scv-path-editor-pv
-  labels:
-    type: local
-spec:
-  storageClassName: standard
-  capacity:
-    storage: 1Gi
-  accessModes:
-    - ReadWriteOnce
-  hostPath:
-    # This path must exist on the Kubernetes node that the pod runs on.
-    path: "/mnt/scv-data"
-  persistentVolumeReclaimPolicy: Retain
-
----
+# SCV Path Editor — Kubernetes 매니페스트
+# 실제 운영(클러스터 path-editor 네임스페이스)에 맞춰 정비된 매니페스트.
+#   - 네임스페이스: path-editor
+#   - 이미지: harbor.cu.ac.kr/patheditor/patheditor:latest (imagePullPolicy: Always)
+#   - 서비스: NodePort 30725 (port 80 → targetPort 8000)
+#   - 스토리지: StorageClass "normal-r3" 로 프로비저닝되는 PVC (1Gi, RWO)
+# 코드 변경 반영은 CI(harbor 에 :latest 재빌드/푸시) 후 다음으로 수행:
+#   kubectl -n path-editor rollout restart deploy/scv-path-editor   (pullPolicy: Always)
 
 # ---------------- Persistent Volume Claim (PVC) ---------------- #
-# This PVC requests a volume from the available PVs.
+# 클러스터의 StorageClass "normal-r3" 가 볼륨을 동적으로 제공한다.
+# (운영에는 이미 'scv-path-editor-pvc' 가 바운드되어 있음)
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: scv-path-editor-pvc
+  namespace: path-editor
 spec:
-  storageClassName: standard
+  storageClassName: normal-r3
   accessModes:
     - ReadWriteOnce
   resources:
@@ -38,11 +26,11 @@ spec:
 ---
 
 # ---------------------- Deployment ---------------------- #
-# The application deployment, now with a volume mount for persistent data.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: scv-path-editor
+  namespace: path-editor
   labels:
     app: scv-path-editor
 spec:
@@ -56,19 +44,18 @@ spec:
         app: scv-path-editor
     spec:
       volumes:
-        # Define the volume from the PVC
         - name: path-storage
           persistentVolumeClaim:
             claimName: scv-path-editor-pvc
       containers:
       - name: scv-path-editor
-        # This image will be updated by the Jenkins pipeline
-        image: your-docker-registry/scv-path-editor:latest
+        # CI 파이프라인이 harbor 에 push 하는 운영 이미지
+        image: harbor.cu.ac.kr/patheditor/patheditor:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
         volumeMounts:
-          # Mount the volume into the container at the specified path
-          # This ensures that files saved in /app/backend/data persist
+          # 경로 데이터 영속화 (APP_DATA_DIR=/app/backend/data/path 의 상위)
           - name: path-storage
             mountPath: /app/backend/data
         resources:
@@ -82,11 +69,11 @@ spec:
 ---
 
 # ------------------------ Service ------------------------ #
-# The service is now of type NodePort, exposing the application on a static port on each node.
 apiVersion: v1
 kind: Service
 metadata:
   name: scv-path-editor-service
+  namespace: path-editor
 spec:
   type: NodePort
   selector:
@@ -95,4 +82,4 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 8000
-      # NodePort, if not specified, will be allocated from the range 30000-32767
+      nodePort: 30725
