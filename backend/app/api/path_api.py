@@ -10,8 +10,7 @@ from pathlib import Path
 
 from ..models.path_models import (
     Node, Link, PathData, NodeCreate, LinkCreate,
-    NodeUpdate, LinkUpdate, CutNodesRequest, PasteNodesRequest,
-    CutNodesResponse, PasteNodesResponse
+    NodeUpdate, LinkUpdate
 )
 from ..services.path_service import PathService
 
@@ -56,6 +55,35 @@ async def list_files(response: Response):
         ]
         files.sort()
         return files
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/files/meta")
+async def list_files_meta(response: Response):
+    """
+    데이터 루트 하위 모든 .json 파일의 메타데이터를 반환
+    [{ "path": "test/a.json", "size": 1234, "mtime": 1690000000.0 }, ...]
+    - size: 바이트, mtime: epoch seconds
+    """
+    base = Path(path_service.data_dir).resolve()
+
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
+    try:
+        items = []
+        for p in base.rglob("*.json"):
+            if p.is_file():
+                st = p.stat()
+                items.append({
+                    "path": p.relative_to(base).as_posix(),
+                    "size": st.st_size,
+                    "mtime": st.st_mtime,
+                })
+        items.sort(key=lambda x: x["path"])
+        return items
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -160,38 +188,45 @@ async def get_current_data():
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     """JSON 파일 업로드"""
-    if not file.filename.endswith('.json'):
+    if not file.filename or not file.filename.endswith('.json'):
         raise HTTPException(status_code=400, detail="Only JSON files are allowed")
-    
+
+    # 경로 보안 검증: 데이터 루트 밖으로 나가는 파일명(../, 절대경로 등) 차단
+    final_path = _resolve_path(file.filename)
+
+    tmp_file_path = None
     try:
         # 임시 파일로 저장
         with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.json') as tmp_file:
             content = await file.read()
             tmp_file.write(content)
             tmp_file_path = tmp_file.name
-        
+
         # JSON 유효성 검사
         with open(tmp_file_path, 'r', encoding='utf-8') as f:
             json_data = json.load(f)
-        
+
         # 데이터 구조 검사
         if "Node" not in json_data or "Link" not in json_data:
             raise HTTPException(status_code=400, detail="Invalid JSON structure. Must contain 'Node' and 'Link' arrays")
-        
+
         # 최종 저장 위치로 이동
-        final_path = os.path.join(path_service.data_dir, file.filename)
-        os.makedirs(os.path.dirname(final_path), exist_ok=True)
-        shutil.move(tmp_file_path, final_path)
-        
+        final_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(tmp_file_path, str(final_path))
+        tmp_file_path = None  # 이동 완료 후 정리 대상에서 제외
+
         return {"message": f"File {file.filename} uploaded successfully"}
-    
+
+    except HTTPException:
+        raise
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format")
     except Exception as e:
-        # 임시 파일 정리
-        if 'tmp_file_path' in locals() and os.path.exists(tmp_file_path):
-            os.unlink(tmp_file_path)
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # 임시 파일이 남아 있으면 정리
+        if tmp_file_path and os.path.exists(tmp_file_path):
+            os.unlink(tmp_file_path)
 
 
 @router.get("/download")
@@ -311,146 +346,8 @@ async def delete_node(node_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/nodes/cut", response_model=CutNodesResponse)
-async def cut_nodes(request: CutNodesRequest):
-    """선택된 노드들을 잘라내기 (버튼 클릭용)"""
-    try:
-        if not request.node_ids:
-            raise HTTPException(status_code=400, detail="잘라낼 노드를 선택해주세요")
-
-        # 중복 제거
-        unique_node_ids = list(set(request.node_ids))
-
-        # 존재하지 않는 노드 ID 검사
-        missing_nodes = []
-        for node_id in unique_node_ids:
-            if not path_service.get_node_by_id(node_id):
-                missing_nodes.append(node_id)
-
-        if missing_nodes:
-            raise HTTPException(
-                status_code=404,
-                detail=f"존재하지 않는 노드: {', '.join(missing_nodes)}"
-            )
-
-        # 노드들 잘라내기
-        cut_nodes, cut_links = path_service.cut_nodes(unique_node_ids)
-
-        if not cut_nodes:
-            raise HTTPException(status_code=400, detail="잘라낼 수 있는 노드가 없습니다")
-
-        return CutNodesResponse(
-            message=f"✂️ {len(cut_nodes)}개 노드와 {len(cut_links)}개 링크를 잘라냈습니다.\n🗂️ 클립보드에 저장되었습니다. 붙여넣기 버튼을 눌러 원하는 위치에 배치하세요.",
-            cut_nodes=cut_nodes,
-            cut_links=cut_links,
-            total_cut_nodes=len(cut_nodes),
-            total_cut_links=len(cut_links)
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"잘라내기 실패: {str(e)}")
-
-
-@router.post("/nodes/paste", response_model=PasteNodesResponse)
-async def paste_nodes(request: PasteNodesRequest):
-    """클립보드의 노드들을 지정된 위치에 붙여넣기 (버튼 클릭용)"""
-    try:
-        # 클립보드에 내용이 있는지 확인
-        if not path_service.has_clipboard_content():
-            raise HTTPException(
-                status_code=400,
-                detail="📭 클립보드가 비어있습니다.\n먼저 노드를 선택하고 잘라내기 버튼을 눌러주세요."
-            )
-
-        # 좌표 유효성 검사
-        if not (-90 <= request.center_lat <= 90):
-            raise HTTPException(
-                status_code=400,
-                detail=f"위도 값이 유효하지 않습니다: {request.center_lat}\n(유효 범위: -90 ~ 90)"
-            )
-
-        if not (-180 <= request.center_lon <= 180):
-            raise HTTPException(
-                status_code=400,
-                detail=f"경도 값이 유효하지 않습니다: {request.center_lon}\n(유효 범위: -180 ~ 180)"
-            )
-
-        # 노드들 붙여넣기
-        pasted_nodes, pasted_links = path_service.paste_nodes(request.center_lat, request.center_lon)
-
-        if not pasted_nodes:
-            raise HTTPException(
-                status_code=400,
-                detail="붙여넣을 노드가 없습니다. 클립보드를 확인해주세요."
-            )
-
-        return PasteNodesResponse(
-            message=f"📍 {len(pasted_nodes)}개 노드와 {len(pasted_links)}개 링크를 붙여넣었습니다.\n📍 새 위치: {request.center_lat:.6f}, {request.center_lon:.6f}",
-            pasted_nodes=pasted_nodes,
-            pasted_links=pasted_links,
-            total_pasted_nodes=len(pasted_nodes),
-            total_pasted_links=len(pasted_links)
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"붙여넣기 실패: {str(e)}")
-
-
-@router.get("/clipboard/status")
-async def get_clipboard_status():
-    """클립보드 상태 확인 (버튼 상태 업데이트용)"""
-    try:
-        has_content = path_service.has_clipboard_content()
-
-        if has_content:
-            node_count = len(path_service.clipboard_nodes)
-            link_count = len(path_service.clipboard_links)
-            return {
-                "has_content": True,
-                "node_count": node_count,
-                "link_count": link_count,
-                "message": f"🗂️ 클립보드에 {node_count}개 노드, {link_count}개 링크가 저장되어 있습니다",
-                "button_text": f"붙여넣기 ({node_count}개 노드)",
-                "paste_enabled": True
-            }
-        else:
-            return {
-                "has_content": False,
-                "node_count": 0,
-                "link_count": 0,
-                "message": "📭 클립보드가 비어있습니다",
-                "button_text": "붙여넣기 (비활성)",
-                "paste_enabled": False
-            }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"클립보드 상태 확인 실패: {str(e)}")
-
-
-@router.delete("/clipboard")
-async def clear_clipboard():
-    """클립보드 내용 삭제 (버튼 클릭용)"""
-    try:
-        had_content = path_service.has_clipboard_content()
-        path_service.clear_clipboard()
-
-        if had_content:
-            return {
-                "message": "🗑️ 클립보드를 비웠습니다",
-                "success": True
-            }
-        else:
-            return {
-                "message": "📭 클립보드가 이미 비어있습니다",
-                "success": True
-            }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"클립보드 삭제 실패: {str(e)}")
+# 참고: 잘라내기/붙여넣기 클립보드는 프런트엔드(localStorage)에서 처리한다.
+# 과거 서버측 클립보드 API(/nodes/cut, /nodes/paste, /clipboard/*)는 미사용으로 제거됨.
 
 
 # Link API

@@ -132,26 +132,5 @@ class LinkUpdate(BaseModel):
     HistRemark: Optional[str] = None
 
 
-class CutNodesRequest(BaseModel):
-    node_ids: List[str]
-
-
-class PasteNodesRequest(BaseModel):
-    center_lat: float
-    center_lon: float
-
-
-class CutNodesResponse(BaseModel):
-    message: str
-    cut_nodes: List[Node]
-    cut_links: List[Link]
-    total_cut_nodes: int
-    total_cut_links: int
-
-
-class PasteNodesResponse(BaseModel):
-    message: str
-    pasted_nodes: List[Node]
-    pasted_links: List[Link]
-    total_pasted_nodes: int
-    total_pasted_links: int
+# 참고: 잘라내기/붙여넣기 클립보드는 프런트엔드(localStorage)에서 처리하므로
+# 서버측 Cut/Paste 요청·응답 모델은 제거되었다.
