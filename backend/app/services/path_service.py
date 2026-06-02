@@ -1,13 +1,30 @@
 import json
 import os
 import math
+import logging
 import utm
 from typing import List, Optional
 from datetime import datetime
 from ..models.path_models import Node, Link, PathData, NodeCreate, LinkCreate, GpsInfo, UtmInfo
 
+logger = logging.getLogger(__name__)
+
 
 class PathService:
+    """경로(노드/링크) 데이터 서비스.
+
+    상태 모델에 대한 주의:
+        - current_nodes / current_links 는 단일 프로세스의 **인메모리** 상태이며,
+          모듈 전역 싱글턴(path_api.py 의 path_service)으로 공유된다.
+        - 따라서 서버 재시작 시 초기화되고, 여러 워커/인스턴스(K8s replicas>1,
+          uvicorn --workers>1)로 확장하면 인스턴스별로 상태가 달라진다.
+        - 영속적인 단일 진실 공급원(source of truth)은 data_dir 하위의 JSON 파일이며,
+          프런트엔드도 자체적으로 currentData 를 보유한다. 인메모리 상태는 보조적이다.
+        - 현재 배포는 K8s replicas:1 의 단일 사용자 도구를 전제로 하므로 이 한계가
+          문제되지 않는다. 다중 인스턴스/동시 편집이 필요해지면 외부 저장소(DB 등)나
+          요청별 파일 기반 처리로 전환해야 한다.
+    """
+
     def __init__(self, data_dir: str = None):
         # 1. 환경 변수에서 데이터 디렉토리 경로를 우선적으로 확인합니다.
         #    이는 컨테이너화된 환경에서 경로를 설정하는 가장 표준적인 방법입니다.
@@ -101,8 +118,9 @@ class PathService:
             node.UtmInfo.Easting = utm_x
             node.UtmInfo.Northing = utm_y
             node.UtmInfo.Zone = f"{zone_num}{zone_letter}"
-        except:
-            pass
+        except Exception as e:
+            # 변환 실패 시 기존 UTM 값을 유지하고 경고만 남긴다(좌표 오류 추적용)
+            logger.warning("노드 %s UTM 변환 실패 (lat=%s, lon=%s): %s", node_id, lat, lon, e)
         
         # 연결된 링크들의 길이 재계산
         self._recalculate_link_lengths(node_id)
@@ -208,148 +226,6 @@ class PathService:
             if link.FromNodeID == node_id or link.ToNodeID == node_id:
                 link.Length = self._calculate_link_length(link.FromNodeID, link.ToNodeID)
 
-    def cut_nodes(self, node_ids: List[str]) -> tuple[List[Node], List[Link]]:
-        """선택된 노드들과 연결된 링크들을 잘라내기"""
-        if not node_ids:
-            return [], []
-
-        # 잘라낼 노드들 찾기
-        cut_nodes = []
-        for node_id in node_ids:
-            node = self.get_node_by_id(node_id)
-            if node:
-                cut_nodes.append(node)
-
-        # 잘라낼 링크들 찾기 (선택된 노드들과 연결된 모든 링크)
-        cut_links = []
-        for link in self.current_links:
-            if link.FromNodeID in node_ids or link.ToNodeID in node_ids:
-                cut_links.append(link)
-
-        # 클립보드에 저장 (인스턴스 변수로 저장)
-        self.clipboard_nodes = [node.copy() for node in cut_nodes]
-        self.clipboard_links = [link.copy() for link in cut_links]
-
-        # 원본에서 제거
-        self.current_nodes = [node for node in self.current_nodes if node.ID not in node_ids]
-        cut_link_ids = [link.ID for link in cut_links]
-        self.current_links = [link for link in self.current_links if link.ID not in cut_link_ids]
-
-        return cut_nodes, cut_links
-
-    def paste_nodes(self, center_lat: float, center_lon: float) -> tuple[List[Node], List[Link]]:
-        """클립보드의 노드들을 지정된 중심 좌표에 붙여넣기"""
-        if not hasattr(self, 'clipboard_nodes') or not self.clipboard_nodes:
-            return [], []
-
-        # 잘라낸 노드들의 중심점 계산
-        original_center_lat = sum(node.GpsInfo.Lat for node in self.clipboard_nodes) / len(self.clipboard_nodes)
-        original_center_lon = sum(node.GpsInfo.Long for node in self.clipboard_nodes) / len(self.clipboard_nodes)
-
-        # 이동 오프셋 계산
-        lat_offset = center_lat - original_center_lat
-        lon_offset = center_lon - original_center_lon
-
-        # 새로운 노드 ID 매핑 (기존 ID -> 새 ID)
-        node_id_mapping = {}
-        pasted_nodes = []
-
-        # 노드들 붙여넣기
-        for original_node in self.clipboard_nodes:
-            # 새 노드 ID 생성
-            new_node_id = self._generate_node_id()
-            node_id_mapping[original_node.ID] = new_node_id
-
-            # 새 위치 계산
-            new_lat = original_node.GpsInfo.Lat + lat_offset
-            new_lon = original_node.GpsInfo.Long + lon_offset
-
-            # UTM 좌표 변환
-            try:
-                utm_x, utm_y, zone_num, zone_letter = utm.from_latlon(new_lat, new_lon)
-                new_utm_info = UtmInfo(
-                    Easting=utm_x,
-                    Northing=utm_y,
-                    Zone=f"{zone_num}{zone_letter}"
-                )
-            except:
-                new_utm_info = original_node.UtmInfo.copy()
-
-            # 새 노드 생성
-            new_node = Node(
-                ID=new_node_id,
-                AdminCode=original_node.AdminCode,
-                NodeType=original_node.NodeType,
-                ITSNodeID=original_node.ITSNodeID,
-                Maker=original_node.Maker,
-                UpdateDate=original_node.UpdateDate,
-                Version=original_node.Version,
-                Remark=original_node.Remark,
-                HistType=original_node.HistType,
-                HistRemark=original_node.HistRemark,
-                Heading=original_node.Heading,
-                GpsInfo=GpsInfo(Lat=new_lat, Long=new_lon, Alt=original_node.GpsInfo.Alt),
-                UtmInfo=new_utm_info
-            )
-
-            pasted_nodes.append(new_node)
-            self.current_nodes.append(new_node)
-
-        # 링크들 붙여넣기
-        pasted_links = []
-        for original_link in self.clipboard_links:
-            # 양쪽 노드가 모두 잘라낸 노드들인 경우만 링크 복원
-            if (original_link.FromNodeID in node_id_mapping and
-                original_link.ToNodeID in node_id_mapping):
-
-                new_from_id = node_id_mapping[original_link.FromNodeID]
-                new_to_id = node_id_mapping[original_link.ToNodeID]
-                new_link_id = self._generate_link_id(new_from_id, new_to_id)
-
-                # 새 링크 길이 계산
-                new_length = self._calculate_link_length(new_from_id, new_to_id)
-
-                new_link = Link(
-                    ID=new_link_id,
-                    AdminCode=original_link.AdminCode,
-                    RoadRank=original_link.RoadRank,
-                    RoadType=original_link.RoadType,
-                    RoadNo=original_link.RoadNo,
-                    LinkType=original_link.LinkType,
-                    LaneNo=original_link.LaneNo,
-                    R_LinkID=original_link.R_LinkID,
-                    L_LinkID=original_link.L_LinkID,
-                    FromNodeID=new_from_id,
-                    ToNodeID=new_to_id,
-                    SectionID=original_link.SectionID,
-                    Length=new_length,
-                    ITSLinkID=original_link.ITSLinkID,
-                    Maker=original_link.Maker,
-                    UpdateDate=original_link.UpdateDate,
-                    Version=original_link.Version,
-                    Remark=original_link.Remark,
-                    HistType=original_link.HistType,
-                    HistRemark=original_link.HistRemark
-                )
-
-                pasted_links.append(new_link)
-                self.current_links.append(new_link)
-
-        return pasted_nodes, pasted_links
-
-    def clear_clipboard(self):
-        """클립보드 내용 삭제"""
-        if hasattr(self, 'clipboard_nodes'):
-            del self.clipboard_nodes
-        if hasattr(self, 'clipboard_links'):
-            del self.clipboard_links
-
-    def has_clipboard_content(self) -> bool:
-        """클립보드에 내용이 있는지 확인"""
-        return (hasattr(self, 'clipboard_nodes') and
-                self.clipboard_nodes and
-                len(self.clipboard_nodes) > 0)
-    
     def list_available_files(self) -> List[str]:
         """사용 가능한 JSON 파일 목록 반환"""
         if not os.path.exists(self.data_dir):

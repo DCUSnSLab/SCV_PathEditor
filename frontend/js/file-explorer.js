@@ -70,10 +70,13 @@ class FileExplorer {
     async loadFileTree(keepState = true) {
         try {
             this.showLoading();
-            const [files, dirs] = await Promise.all([
+            const [files, dirs, meta] = await Promise.all([
                 pathAPI.listFiles(),  // 배열
                 pathAPI.listDirs(),   // 배열(또는 방탄 처리로 배열화)
+                pathAPI.listFilesMeta().catch(() => []), // [{path,size,mtime}] (실패 시 빈 배열)
             ]);
+            // 경로 -> 메타데이터 맵 (getFileSize/getFileDate 에서 조회)
+            this.fileMeta = new Map((meta || []).map(m => [m.path, m]));
             this.treeData = this.buildFileTree(files, dirs);
             if (keepState) {
                 this.applyStateToTree(this.treeData);
@@ -545,13 +548,22 @@ class FileExplorer {
     }
 
     getFileSize(filename) {
-        // TODO: 실제 파일 크기 정보 API에서 가져오기
-        return Math.floor(Math.random() * 100) + 1 + 'KB';
+        const m = this.fileMeta?.get(filename);
+        if (!m || typeof m.size !== 'number') return '';
+        return this.formatBytes(m.size);
+    }
+
+    formatBytes(bytes) {
+        if (bytes < 1024) return `${bytes}B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(2)}MB`;
     }
 
     getFileDate(filename) {
-        // TODO: 실제 파일 수정 날짜 API에서 가져오기
-        return new Date().toLocaleDateString('ko-KR');
+        const m = this.fileMeta?.get(filename);
+        if (!m || typeof m.mtime !== 'number') return '';
+        // mtime 은 epoch seconds → ms 로 변환
+        return new Date(m.mtime * 1000).toLocaleDateString('ko-KR');
     }
 
     // 외부에서 파일 선택 콜백 설정

@@ -59,6 +59,27 @@ python main.py
 ### 3. 웹 애플리케이션 접속
 브라우저에서 `http://localhost:8000` 접속
 
+## Docker 개발 환경 (권장)
+
+운영 이미지(`harbor.cu.ac.kr/patheditor/patheditor`)를 베이스로, 코드 hot-reload가
+적용된 개발용 컨테이너를 제공합니다. 로컬 소스를 컨테이너에 마운트하므로
+별도의 파이썬 의존성 설치 없이 즉시 개발할 수 있습니다.
+
+```bash
+# 사설 레지스트리 로그인 (최초 1회, cu.ac.kr 계정)
+docker login harbor.cu.ac.kr
+
+# 개발 컨테이너 빌드 및 실행
+docker compose -f docker-compose.dev.yml up --build
+```
+
+- 접속: `http://localhost:8003`
+- **백엔드(.py) 수정** → `uvicorn --reload`가 변경을 감지해 자동 재시작
+- **프론트엔드(html/js/css) 수정** → 브라우저 새로고침만으로 반영
+- 경로 데이터는 `backend/data/`에 영속화되어 컨테이너 재시작 후에도 유지
+
+> 운영용 컨테이너는 `docker compose up`(포트 8002)으로 별도 실행합니다.
+
 ## 프로젝트 구조
 
 ```
@@ -179,6 +200,23 @@ await window.debug.restart()
 1. **서버 실행 필요**: 백엔드 서버가 실행되어야 함
 2. **데이터 백업**: 중요한 데이터는 주기적으로 저장
 3. **브라우저 호환성**: 모던 브라우저 권장 (Chrome, Firefox, Safari, Edge)
+
+### 서버 상태 모델의 한계 (단일 인스턴스 전제)
+
+백엔드 `PathService`의 `current_nodes`/`current_links`는 **단일 프로세스의 인메모리
+상태**입니다. 다음 전제 하에서만 정상 동작합니다.
+
+- **영속 데이터의 단일 진실 공급원은 `data/path` 하위 JSON 파일**이며, 인메모리
+  상태는 보조적입니다. (프런트엔드도 자체적으로 `currentData`를 보유)
+- 서버를 **재시작하면 인메모리 상태는 초기화**됩니다(저장된 파일은 영향 없음).
+- **다중 인스턴스/다중 워커로 확장하면 인스턴스별 상태가 달라집니다.** 현재 배포는
+  `k8s-deployment.yaml`의 `replicas: 1` 단일 사용자 도구를 전제로 하므로 문제되지
+  않습니다.
+- 다중 인스턴스나 동시 편집이 필요해지면 외부 저장소(DB 등) 또는 요청별 파일 기반
+  처리로 전환해야 합니다. (`uvicorn --workers`도 1 유지 권장)
+
+> 잘라내기/붙여넣기 클립보드는 **프런트엔드 `localStorage`**에서 처리합니다. 과거의
+> 서버측 클립보드 API는 미사용으로 제거되었습니다.
 
 ## 향후 개선 계획
 

@@ -182,7 +182,8 @@ class UIManager {
             'drag': 'dragModeBtn',
             'addNode': 'addNodeModeBtn',
             'quickLink': 'linkTwoNodesModeBtn',
-            'intervalCreate': 'intervalCreateModeBtn'
+            'intervalCreate': 'intervalCreateModeBtn',
+            'delete': 'deleteModeBtn'
         };
 
         // 같은 모드를 다시 클릭하면 해제
@@ -214,7 +215,8 @@ class UIManager {
             'drag': '노드 드래그 모드 - 노드를 드래그하여 위치를 변경할 수 있습니다',
             'addNode': '노드 추가 모드 - 지도를 클릭하여 새 노드를 추가하세요',
             'quickLink': '두 노드 잇기 모드(Quick Link) - 두 노드를 순서대로 클릭하여 링크를 생성하세요',
-            'intervalCreate': '구간 노드 생성 모드 - 시작점을 클릭하세요'
+            'intervalCreate': '구간 노드 생성 모드 - 시작점을 클릭하세요',
+            'delete': '삭제 모드 - 삭제할 노드를 클릭하세요'
         };
 
         showNotification(messages[mode] || '모드 변경됨', 'info');
@@ -371,7 +373,7 @@ class UIManager {
             // 저장 완료 메시지
             let successMsg = `${filename} (${sizeText}) 저장이 완료되었습니다`;
             successMsg += `\n📊 노드: ${this.currentData.Node.length}개, 링크: ${this.currentData.Link.length}개`;
-            successMsg += `\n🔄 모든 UTM 좌표가 GPS 기준으로 재계산되었습니다 (Zone: 52N)`;
+            successMsg += `\n🔄 모든 UTM 좌표가 GPS 기준으로 재계산되었습니다 (UTM Zone 자동 산출)`;
 
             showNotification(successMsg, 'success');
             this.hideModal('saveModal');
@@ -585,6 +587,10 @@ class UIManager {
         if (this.currentData.Node.length > 0) {
             window.pathMap.fitToData();
         }
+
+        // 지도 재구성으로 선택이 무효화되었으므로 선택 정보/버튼 상태를 동기화
+        this.updateSelectedNodeInfo(null, null);
+        this.updateSelectedNodeButtons();
     }
 
     selectNodeFromTable(nodeId) {
@@ -1037,18 +1043,6 @@ class UIManager {
         }
     }
 
-    // 클립보드 상태 업데이트 (서버 기반 - 현재 사용 안 함)
-    async updateClipboardStatus() {
-        try {
-            this.clipboardStatus = await pathAPI.getClipboardStatus();
-            this.updateClipboardUI();
-        } catch (error) {
-            console.error('클립보드 상태 확인 실패:', error);
-            this.clipboardStatus = { has_content: false, paste_enabled: false };
-            this.updateClipboardUI();
-        }
-    }
-
     // 선택된 노드에 따른 버튼 상태 업데이트
     updateSelectedNodeButtons() {
         const selectedNodes = window.pathMap?.getSelectedNodeIds() || [];
@@ -1217,7 +1211,8 @@ class UIManager {
 
             // 노드들 복사 및 새 ID 생성
             for (const originalNode of originalNodes) {
-                const newNodeId = this._generateNewNodeId(originalNode.ID);
+                // 같은 배치에서 이미 부여한 ID들도 고려하여 중복 방지
+                const newNodeId = this._generateNewNodeId(Object.values(nodeIdMapping));
                 nodeIdMapping[originalNode.ID] = newNodeId;
 
                 // 새 위치 계산
@@ -1231,7 +1226,7 @@ class UIManager {
                     newUtmInfo = {
                         Easting: Math.round(utmData.easting * 100) / 100,
                         Northing: Math.round(utmData.northing * 100) / 100,
-                        Zone: "52N"
+                        Zone: `${utmData.zone_number}${utmData.zone_letter}`
                     };
                 } catch (error) {
                     console.warn('UTM 변환 실패, 기본값 사용:', error);
@@ -1261,7 +1256,7 @@ class UIManager {
                 if (nodeIdMapping[originalLink.FromNodeID] && nodeIdMapping[originalLink.ToNodeID]) {
                     const newFromId = nodeIdMapping[originalLink.FromNodeID];
                     const newToId = nodeIdMapping[originalLink.ToNodeID];
-                    const newLinkId = this._generateNewLinkId(originalLink.ID, newFromId, newToId);
+                    const newLinkId = this._generateNewLinkId(newFromId, newToId, pastedLinks.map(l => l.ID));
 
                     // 새 링크 길이 계산
                     const newLength = this._calculateLinkLength(
@@ -1360,32 +1355,37 @@ class UIManager {
         this.updateClipboardUI();
     }
 
-    // 새 노드 ID 생성
-    _generateNewNodeId(originalId) {
-        let newId = originalId;
-        let counter = 1;
-
-        // 이미 동일한 ID가 있는지 확인하고 카운터 추가
-        while (this.currentData.Node.some(node => node.ID === newId)) {
-            newId = `${originalId}_${counter}`;
-            counter++;
-        }
-
-        return newId;
+    // 새 노드 ID 생성 (N#### 연속 번호 — 백엔드 _generate_node_id와 동일 포맷)
+    // extraUsedIds: 아직 currentData에 반영되지 않은, 같은 붙여넣기 배치에서 이미 부여한 ID들
+    _generateNewNodeId(extraUsedIds = []) {
+        let maxIdx = 0;
+        this.currentData.Node.forEach(n => {
+            maxIdx = Math.max(maxIdx, this.parseNodeIdx(n.ID));
+        });
+        extraUsedIds.forEach(id => {
+            maxIdx = Math.max(maxIdx, this.parseNodeIdx(id));
+        });
+        return this.formatNodeId(maxIdx + 1);
     }
 
-    // 새 링크 ID 생성
-    _generateNewLinkId(originalId, fromNodeId, toNodeId) {
-        let newId = originalId;
-        let counter = 1;
+    // 새 링크 ID 생성 (L{from}{to} — 백엔드 _generate_link_id와 동일 포맷)
+    // 충돌 시 L#### 연속 번호로 대체
+    _generateNewLinkId(fromNodeId, toNodeId, extraUsedIds = []) {
+        const fromNum = fromNodeId.startsWith('N') ? fromNodeId.slice(1) : fromNodeId;
+        const toNum = toNodeId.startsWith('N') ? toNodeId.slice(1) : toNodeId;
+        const baseId = `L${fromNum}${toNum}`;
 
-        // 이미 동일한 ID가 있는지 확인하고 카운터 추가
-        while (this.currentData.Link.some(link => link.ID === newId)) {
-            newId = `${originalId}_${counter}`;
-            counter++;
-        }
+        const used = new Set([
+            ...this.currentData.Link.map(l => l.ID),
+            ...extraUsedIds
+        ]);
 
-        return newId;
+        if (!used.has(baseId)) return baseId;
+
+        // 충돌 시 일련번호 부여
+        let maxIdx = 0;
+        used.forEach(id => { maxIdx = Math.max(maxIdx, this.parseLinkIdx(id)); });
+        return `L${String(maxIdx + 1).padStart(4, '0')}`;
     }
 
     // 링크 길이 계산

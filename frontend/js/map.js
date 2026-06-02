@@ -100,11 +100,20 @@ class PathMap {
     }
 
     createMapboxLayer() {
-        // Mapbox API 키 설정 (여기에 본인 API 키 넣으세요)
-        const MAPBOX_API_KEY = 'pk.eyJ1IjoiYmFja2dyb3VuZG1pbiIsImEiOiJjbWZnZDNoZm0wMGQ1MmpxMHllYWJqYW5nIn0.OGk1et_KaOJONN7kZwOBeQ';
-        
-        const apiKey = MAPBOX_API_KEY
-        
+        // Mapbox 토큰은 서버 env(MAPBOX_TOKEN)에서 /api/config 로 주입된다 (소스에 키를 두지 않음).
+        const apiKey = (window.APP_CONFIG && window.APP_CONFIG.mapboxToken) || '';
+
+        if (!apiKey) {
+            // 토큰 미설정 시 Mapbox 대신 Esri 위성 레이어로 대체
+            console.warn('MAPBOX_TOKEN 미설정 — Mapbox 위성 대신 Esri 위성 레이어를 사용합니다.');
+            return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+                maxZoom: 30,
+                maxNativeZoom: 18,
+                zoomOffset: 0
+            });
+        }
+
         // Mapbox Satellite (최고 해상도 - 22레벨)
         return L.tileLayer(`https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.png?access_token=${apiKey}`, {
             attribution: '© Mapbox, © OpenStreetMap',
@@ -272,25 +281,17 @@ class PathMap {
 
     handleMapClick(e) {
         const { lat, lng } = e.latlng;
-        
-        if (this.mode === 'addNode') {
-            this.handleAddNodeClick(lat, lng);
-        } else if (this.mode === 'quickLink') {
+
+        // 제스처 기반 모드는 전용 핸들러에서 처리
+        if (this.mode === 'quickLink') {
             this.handleQuickLinkClick(e);
         } else if (this.mode === 'intervalCreate') {
             this.handleIntervalCreateClick(e.latlng);
-        } else if (this.mode === 'delete') {
-
         }
-        
+
+        // addNode 등 onMapClick 콜백으로 처리되는 모드는 여기서 한 번만 전달
         if (this.onMapClick) {
             this.onMapClick(lat, lng, this.mode);
-        }
-    }
-
-    handleAddNodeClick(lat, lng) {
-        if (this.onMapClick) {
-            this.onMapClick(lat, lng, 'addNode');
         }
     }
 
@@ -470,8 +471,15 @@ class PathMap {
                 this.toggleSelectNode(ID);
                 return;
             }
+            // 삭제 모드: 클릭한 노드 삭제
+            if (this.mode === 'delete') {
+                if (window.uiManager) {
+                    window.uiManager.deleteNode(ID);
+                }
+                return;
+            }
             // 특수 모드들(지도 클릭 제스처 사용하는 모드)에서는 건드리지 않음
-            if (this.mode === 'addNode' || this.mode === 'quickLink' || this.mode === 'intervalCreate' || this.mode === 'delete') {
+            if (this.mode === 'addNode' || this.mode === 'quickLink' || this.mode === 'intervalCreate') {
                 return;
             }
             // 그 외(아무 모드도 아님/일반 상태/드래그 모드 등): 항상 단일 선택
@@ -867,6 +875,7 @@ class PathMap {
         this.links.clear();
 
         this.selectedNode = null;
+        this.selectedNodes.clear(); // 지도 재구성 시 복수 선택 상태도 초기화 (stale 선택 방지)
         this.quickLinkFirstNode = null;
     }
 

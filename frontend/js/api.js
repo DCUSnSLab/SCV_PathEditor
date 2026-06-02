@@ -56,6 +56,18 @@ class PathAPI {
         });
     }
 
+    async listFilesMeta() {
+        return await this.request(`/files/meta?_=${Date.now()}`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
+        });
+    }
+
     async loadPathData(filename) {
         const rel = String(filename).replace(/^\/+/, '');
         const q = encodeURIComponent(rel);
@@ -267,11 +279,11 @@ class PathAPI {
                 // UTM 좌표 재계산 (서버 API 사용)
                 const utmData = await this.latLngToUtm(Lat, Long);
 
-                // UTM 정보 업데이트 (52N으로 강제 설정)
+                // UTM 정보 업데이트 (GPS 기준 실제 Zone 사용)
                 node.UtmInfo = {
                     Easting: Math.round(utmData.easting * 100) / 100,  // 소수점 2자리
                     Northing: Math.round(utmData.northing * 100) / 100,
-                    Zone: "52N"  // 강제로 52N 설정
+                    Zone: `${utmData.zone_number}${utmData.zone_letter}`
                 };
 
                 recalculatedCount++;
@@ -280,11 +292,11 @@ class PathAPI {
             } catch (error) {
                 console.error(`${node.ID || `Node[${i}]`}: UTM 재계산 실패 -`, error);
 
-                // 실패 시 기본값 설정
-                node.UtmInfo = {
+                // 실패 시 기존 UTM 값 유지 (없으면 0으로 초기화)
+                node.UtmInfo = node.UtmInfo || {
                     Easting: 0,
                     Northing: 0,
-                    Zone: "52N"
+                    Zone: ""
                 };
             }
         }
@@ -477,35 +489,8 @@ class PathAPI {
         });
     }
 
-    // 잘라내기/붙여넣기 관련 API
-    async cutNodes(nodeIds) {
-        return await this.request('/nodes/cut', {
-            method: 'POST',
-            body: JSON.stringify({ node_ids: nodeIds })
-        });
-    }
-
-    async pasteNodes(centerLat, centerLon) {
-        return await this.request('/nodes/paste', {
-            method: 'POST',
-            body: JSON.stringify({
-                center_lat: centerLat,
-                center_lon: centerLon
-            })
-        });
-    }
-
-    async getClipboardStatus() {
-        return await this.request('/clipboard/status', {
-            method: 'GET'
-        });
-    }
-
-    async clearClipboard() {
-        return await this.request('/clipboard', {
-            method: 'DELETE'
-        });
-    }
+    // 참고: 잘라내기/붙여넣기 클립보드는 프런트엔드(localStorage)에서 처리하므로
+    // 서버측 클립보드 API 클라이언트는 제거되었다. (ui.js cutSelectedNodes/pasteNodes 참고)
 
 }
 

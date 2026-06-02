@@ -9,6 +9,17 @@ __pycache__/
 .venv
 venv/
 
+# Python 가상환경 (backend 하위에 잘못 커밋되어 있던 것 포함)
+backend/bin/
+backend/lib/
+backend/lib64
+backend/include/
+backend/pyvenv.cfg
+/pyvenv.cfg
+
+# Windows 다운로드 메타데이터(ADS)
+*:Zone.Identifier
+
 # VS Code
 .vscode/
 

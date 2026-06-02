@@ -8,9 +8,19 @@ class SCVPathEditor {
 
     async init() {
         try {
+            // 런타임 설정 로드 (Mapbox 토큰 등은 서버 env 에서 주입 — 소스에 비밀값을 두지 않음)
+            // 지도 생성 전에 먼저 가져와 window.APP_CONFIG 에 보관한다.
+            try {
+                const res = await fetch(buildAppUrl('/api/config'));
+                window.APP_CONFIG = res.ok ? await res.json() : {};
+            } catch (e) {
+                console.warn('런타임 설정(/api/config) 로드 실패, 기본값 사용:', e);
+                window.APP_CONFIG = {};
+            }
+
             // UI 매니저 초기화
             this.ui = new UIManager();
-            
+
             // 지도 초기화
             this.map = new PathMap('map');
             
