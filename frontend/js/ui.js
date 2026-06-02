@@ -171,12 +171,7 @@ class UIManager {
     }
 
     setMode(mode) {
-        // 모든 모드 버튼 비활성화
-        document.querySelectorAll('.btn-mode').forEach(btn => {
-            btn.classList.remove('active');
-        });
-
-        // 선택된 모드 버튼 활성화
+        // 모드 → 버튼 ID 매핑
         const modeButtons = {
             'select': 'selectModeBtn',
             'drag': 'dragModeBtn',

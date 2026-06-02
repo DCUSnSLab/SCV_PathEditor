@@ -795,9 +795,7 @@ class PathMap {
         if (this.isDragging && this.draggedMarker && this.mode === 'drag') {
             // 마커 위치는 즉시 업데이트
             this.draggedMarker.setLatLng(e.latlng);
-            // ⬇ handleGlobalMouseMove 안에 마커 setLatLng 다음 줄에 추가
-            this.updateHeadingPosition(this.draggedNodeId);
-
+            // 헤딩 화살표도 같은 위치로 이동
             if (this.draggedNodeId) this.updateHeadingPosition(this.draggedNodeId);
 
             // 링크 업데이트는 쓰로틀링 적용 (성능 개선)

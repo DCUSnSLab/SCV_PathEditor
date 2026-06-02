@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 
 
 class GpsInfo(BaseModel):
@@ -95,42 +95,8 @@ class LinkCreate(BaseModel):
     HistRemark: str = ""
 
 
-class NodeUpdate(BaseModel):
-    AdminCode: Optional[str] = None
-    NodeType: Optional[int] = None
-    ITSNodeID: Optional[str] = None
-    Maker: Optional[str] = None
-    UpdateDate: Optional[str] = None
-    Version: Optional[str] = None
-    Remark: Optional[str] = None
-    HistType: Optional[str] = None
-    HistRemark: Optional[str] = None
-    Heading: Optional[float] = None
-    GpsInfo: Optional[GpsInfo] = None
-    UtmInfo: Optional[UtmInfo] = None
-
-
-class LinkUpdate(BaseModel):
-    AdminCode: Optional[str] = None
-    RoadRank: Optional[int] = None
-    RoadType: Optional[int] = None
-    RoadNo: Optional[str] = None
-    LinkType: Optional[int] = None
-    LaneNo: Optional[int] = None
-    R_LinkID: Optional[str] = None
-    L_LinkID: Optional[str] = None
-    FromNodeID: Optional[str] = None
-    ToNodeID: Optional[str] = None
-    SectionID: Optional[str] = None
-    Length: Optional[float] = None
-    ITSLinkID: Optional[str] = None
-    Maker: Optional[str] = None
-    UpdateDate: Optional[str] = None
-    Version: Optional[str] = None
-    Remark: Optional[str] = None
-    HistType: Optional[str] = None
-    HistRemark: Optional[str] = None
-
-
-# 참고: 잘라내기/붙여넣기 클립보드는 프런트엔드(localStorage)에서 처리하므로
-# 서버측 Cut/Paste 요청·응답 모델은 제거되었다.
+# 참고:
+# - 노드/링크 부분 수정(PATCH)용 NodeUpdate/LinkUpdate 모델은 해당 엔드포인트가 없어
+#   미사용 상태였으므로 제거했다. (속성 편집은 프런트엔드에서 처리 후 파일 저장)
+# - 잘라내기/붙여넣기 클립보드도 프런트엔드(localStorage)에서 처리하므로
+#   서버측 Cut/Paste 요청·응답 모델은 제거되었다.
