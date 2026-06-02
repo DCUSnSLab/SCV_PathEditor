@@ -9,8 +9,7 @@ from pydantic import BaseModel
 from pathlib import Path
 
 from ..models.path_models import (
-    Node, Link, PathData, NodeCreate, LinkCreate,
-    NodeUpdate, LinkUpdate
+    Node, Link, PathData, NodeCreate, LinkCreate
 )
 from ..services.path_service import PathService
 

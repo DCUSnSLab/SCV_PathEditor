@@ -46,13 +46,13 @@ PyQt5 기반의 데스크톱 애플리케이션을 웹 브라우저 기반으로
 
 ### 1. 의존성 설치
 ```bash
-cd web_version/backend
+cd backend
 pip install -r requirements.txt
 ```
 
 ### 2. 서버 실행
 ```bash
-cd web_version/backend
+cd backend
 python main.py
 ```
 
@@ -61,14 +61,11 @@ python main.py
 
 ## Docker 개발 환경 (권장)
 
-운영 이미지(`harbor.cu.ac.kr/patheditor/patheditor`)를 베이스로, 코드 hot-reload가
-적용된 개발용 컨테이너를 제공합니다. 로컬 소스를 컨테이너에 마운트하므로
-별도의 파이썬 의존성 설치 없이 즉시 개발할 수 있습니다.
+운영과 동일한 `python:3.10-slim` 베이스에 hot-reload 도구(watchfiles)를 더한
+자체 완결형 개발 컨테이너를 제공합니다. 사설 레지스트리 접근 없이 빌드되며,
+로컬 소스를 컨테이너에 마운트하므로 코드 수정이 즉시 반영됩니다.
 
 ```bash
-# 사설 레지스트리 로그인 (최초 1회, cu.ac.kr 계정)
-docker login harbor.cu.ac.kr
-
 # 개발 컨테이너 빌드 및 실행
 docker compose -f docker-compose.dev.yml up --build
 ```
@@ -78,18 +75,38 @@ docker compose -f docker-compose.dev.yml up --build
 - **프론트엔드(html/js/css) 수정** → 브라우저 새로고침만으로 반영
 - 경로 데이터는 `backend/data/`에 영속화되어 컨테이너 재시작 후에도 유지
 
+### 환경변수
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `APP_DATA_DIR` | `backend/data/path` | 경로 JSON 데이터 디렉터리 |
+| `MAPBOX_TOKEN` | (없음) | Mapbox 위성 레이어 토큰. 미설정 시 Esri 위성으로 대체 |
+| `CORS_ALLOW_ORIGINS` | `*` | CORS 허용 출처(쉼표 구분). 와일드카드면 credentials 비활성 |
+
 > 운영용 컨테이너는 `docker compose up`(포트 8002)으로 별도 실행합니다.
+
+## 테스트
+
+FastAPI `TestClient` 기반 백엔드 API 테스트가 포함되어 있습니다.
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest tests -q
+```
+
+테스트는 임시 데이터 디렉터리(`APP_DATA_DIR`)를 사용하므로 실제 데이터에 영향을 주지
+않습니다. 헬스 체크, 좌표 변환 왕복, 노드 CRUD, 저장/로드/메타, 경로 탐색 차단 등을 검증합니다.
 
 ## 프로젝트 구조
 
 ```
-web_version/
+.
 ├── backend/
 │   ├── app/
-│   │   ├── models/          # 데이터 모델 (Pydantic)
-│   │   ├── api/             # REST API 엔드포인트
-│   │   ├── services/        # 비즈니스 로직
-│   │   └── utils/           # 유틸리티 함수
+│   │   ├── models/          # 데이터 모델 (Pydantic) — path_models.py
+│   │   ├── api/             # REST API — path_api.py, coords_api.py
+│   │   └── services/        # 비즈니스 로직 — path_service.py
+│   ├── data/path/           # 경로 JSON 데이터
 │   ├── main.py              # FastAPI 서버 진입점
 │   └── requirements.txt     # Python 의존성
 ├── frontend/
@@ -99,8 +116,13 @@ web_version/
 │       ├── api.js           # API 클라이언트
 │       ├── map.js           # 지도 관리 (Leaflet)
 │       ├── ui.js            # UI 관리 및 테이블
+│       ├── file-explorer.js # 파일 탐색기
 │       └── app.js           # 메인 애플리케이션
-└── data/                    # JSON 데이터 파일
+├── Dockerfile               # 운영 이미지
+├── Dockerfile.dev           # 개발 이미지 (hot-reload)
+├── docker-compose.yml       # 운영 실행 (포트 8002)
+├── docker-compose.dev.yml   # 개발 실행 (포트 8003)
+└── k8s-deployment.yaml      # Kubernetes 배포
 ```
 
 ## API 엔드포인트
