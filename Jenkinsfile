@@ -7,6 +7,11 @@
 pipeline {
     agent any
 
+    triggers {
+        // web_editor 변경을 5분 주기로 폴링하여 자동 빌드/배포 (인바운드 webhook 불필요)
+        pollSCM('H/5 * * * *')
+    }
+
     environment {
         REGISTRY = 'harbor.cu.ac.kr'
         IMAGE    = 'harbor.cu.ac.kr/patheditor/patheditor'
