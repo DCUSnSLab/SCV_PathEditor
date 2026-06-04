@@ -478,8 +478,14 @@ class PathMap {
                 }
                 return;
             }
-            // 특수 모드들(지도 클릭 제스처 사용하는 모드)에서는 건드리지 않음
-            if (this.mode === 'addNode' || this.mode === 'quickLink' || this.mode === 'intervalCreate') {
+            // QuickLink 모드: 마커를 정확히 클릭해도 링크 선택이 동작하도록 위임
+            // (stopPropagation 으로 지도 클릭 핸들러가 막히므로 여기서 직접 처리)
+            if (this.mode === 'quickLink') {
+                this.handleQuickLinkClick({ latlng: marker.getLatLng() });
+                return;
+            }
+            // 그 외 지도 클릭 제스처 사용 모드에서는 마커 클릭을 무시
+            if (this.mode === 'addNode' || this.mode === 'intervalCreate') {
                 return;
             }
             // 그 외(아무 모드도 아님/일반 상태/드래그 모드 등): 항상 단일 선택
