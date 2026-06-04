@@ -1,98 +1,55 @@
+// SCV Path Editor CI/CD
+// Jenkins 잡 'SCV_PathEditor' 가 "Pipeline script from SCM" 으로 이 파일을 읽어 실행한다.
+// 동작 환경(검증됨):
+//   - 에이전트: Kubernetes 플러그인 기본 템플릿(Pod). /var/run/docker.sock(docker), /usr/bin/kubectl 마운트.
+//   - 에이전트의 인클러스터 kubectl 은 path-editor 네임스페이스 배포 권한 보유 → 별도 kubeconfig 자격증명 불필요.
+//   - harbor push 는 Jenkins 자격증명 'junhp_harbor'(Username/Password) 사용.
 pipeline {
     agent any
 
     environment {
-        // IMPORTANT: Replace these placeholder values with your actual configuration
-        DOCKER_REGISTRY = 'https://index.docker.io/v1/' // Or your private registry URL
-        DOCKER_USERNAME = 'your-docker-username'      // Docker Hub username or repository owner
-        IMAGE_NAME = "${DOCKER_USERNAME}/scv-path-editor"
-        
-        // The ID of the Username/Password credential for Docker stored in Jenkins
-        DOCKER_CREDENTIALS_ID = 'dockerhub-credentials' 
-        
-        // The ID of the kubeconfig file credential stored in Jenkins
-        KUBECONFIG_CREDENTIALS_ID = 'kubernetes-kubeconfig'
-        
-        // The deployment name from your k8s-deployment.yaml file
-        K8S_DEPLOYMENT_NAME = 'scv-path-editor'
+        REGISTRY = 'harbor.cu.ac.kr'
+        IMAGE    = 'harbor.cu.ac.kr/patheditor/patheditor'
+        NS       = 'path-editor'
+        DEPLOY   = 'scv-path-editor'
+        HARBOR_CREDENTIALS_ID = 'junhp_harbor'
     }
 
     stages {
         stage('Checkout') {
             steps {
-                echo 'Checking out source code from Git...'
                 checkout scm
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build') {
             steps {
-                echo "Building Docker image: ${IMAGE_NAME}:${env.BUILD_NUMBER}"
-                script {
-                    docker.build("${IMAGE_NAME}:${env.BUILD_NUMBER}", ".")
+                sh 'docker build -t $IMAGE:$BUILD_NUMBER -t $IMAGE:latest .'
+            }
+        }
+
+        stage('Push') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: HARBOR_CREDENTIALS_ID, usernameVariable: 'HU', passwordVariable: 'HP')]) {
+                    sh 'echo "$HP" | docker login $REGISTRY -u "$HU" --password-stdin'
+                    sh 'docker push $IMAGE:$BUILD_NUMBER'
+                    sh 'docker push $IMAGE:latest'
                 }
             }
         }
 
-        stage('Login to Docker Registry') {
+        stage('Deploy') {
             steps {
-                echo "Logging in to ${DOCKER_REGISTRY}..."
-                withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                    sh "echo ${PASSWORD} | docker login -u ${USERNAME} --password-stdin ${DOCKER_REGISTRY}"
-                }
-            }
-        }
-
-        stage('Push Docker Image') {
-            steps {
-                echo "Pushing image ${IMAGE_NAME}:${env.BUILD_NUMBER} to ${DOCKER_REGISTRY}"
-                sh "docker push ${IMAGE_NAME}:${env.BUILD_NUMBER}"
-                
-                echo "Tagging and pushing the 'latest' version"
-                sh "docker tag ${IMAGE_NAME}:${env.BUILD_NUMBER} ${IMAGE_NAME}:latest"
-                sh "docker push ${IMAGE_NAME}:latest"
-            }
-        }
-
-        stage('Deploy to Kubernetes') {
-            steps {
-                echo "Deploying application to Kubernetes cluster..."
-                // Use the Jenkins Kubernetes CLI plugin to provide kubectl with credentials
-                withKubeConfig([credentialsId: KUBECONFIG_CREDENTIALS_ID]) {
-                    sh '''
-                        echo "Updating Kubernetes deployment with new image: ${IMAGE_NAME}:${env.BUILD_NUMBER}"
-                        
-                        # Use sed to replace the image tag in the YAML file. 
-                        # This makes the change idempotent and trackable.
-                        sed -i "s|image: .*|image: ${IMAGE_NAME}:${env.BUILD_NUMBER}|g" k8s-deployment.yaml
-                        
-                        echo "Applying updated k8s configuration..."
-                        kubectl apply -f k8s-deployment.yaml
-                        
-                        echo "Waiting for deployment rollout to complete..."
-                        kubectl rollout status deployment/${K8S_DEPLOYMENT_NAME} --timeout=120s
-                        
-                        echo "Deployment successful!"
-                    '''
-                }
+                // 불변 태그(:BUILD_NUMBER)로 이미지를 갱신하여 롤아웃 유도
+                sh 'kubectl -n $NS set image deployment/$DEPLOY $DEPLOY=$IMAGE:$BUILD_NUMBER'
+                sh 'kubectl -n $NS rollout status deployment/$DEPLOY --timeout=120s'
             }
         }
     }
 
     post {
         always {
-            stage('Logout from Docker Registry') {
-                steps {
-                    echo "Logging out from Docker registry..."
-                    sh 'docker logout'
-                }
-            }
-            
-            stage('Clean up workspace') {
-                steps {
-                    cleanWs()
-                }
-            }
+            sh 'docker logout $REGISTRY || true'
         }
     }
 }
