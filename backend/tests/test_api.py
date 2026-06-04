@@ -108,3 +108,51 @@ def test_upload_rejects_path_traversal(client):
 def test_removed_clipboard_endpoint(client):
     # 서버측 클립보드 API 제거 회귀 가드
     assert client.get("/api/path/clipboard/status").status_code == 404
+
+
+# ---- QA 회귀 (PR-A): 의도한 4xx 가 500 으로 삼켜지지 않는지 ----
+
+def test_delete_link_missing_returns_404(client):
+    # B2: except Exception 이 404 를 삼키지 않아야 함 (이전엔 500)
+    assert client.delete("/api/path/links/LZZZZ9999").status_code == 404
+
+
+def test_delete_node_missing_returns_404(client):
+    assert client.delete("/api/path/nodes/NZZZZ9999").status_code == 404
+
+
+def test_update_position_missing_returns_404(client):
+    r = client.put("/api/path/nodes/NZZZZ9999/position", params={"lat": 35.0, "lon": 128.0})
+    assert r.status_code == 404
+
+
+def test_save_oversize_returns_413(client):
+    # B1: 413 이 직렬화 except 에 삼켜지지 않고 그대로 반환되어야 함
+    big_remark = "x" * 6000
+    nodes = [dict(ID=f"N{i:05d}", Remark=big_remark,
+                  GpsInfo={"Lat": 35.0, "Long": 128.0, "Alt": 0.0},
+                  UtmInfo={"Easting": 0.0, "Northing": 0.0, "Zone": "52S"})
+             for i in range(2000)]  # ≈12MB
+    r = client.post("/api/path/save/qa_big.json", json={"Node": nodes, "Link": []})
+    assert r.status_code == 413
+
+
+def test_download_folder_returns_404(client):
+    # B5: 폴더 다운로드는 _safe_join 단계에서 404
+    client.post("/api/path/files/mkdir", json={"path": "qa_dlfolder"})
+    assert client.get("/api/path/download", params={"path": "qa_dlfolder"}).status_code == 404
+
+
+def test_get_load_syncs_server_state(client):
+    # B3: GET /load 가 서버 인메모리 상태를 채워, 로드한 데이터의 삭제가 동작해야 함
+    data = {"Node": [_full_node("N0001", 35.0, 128.0), _full_node("N0002", 35.001, 128.001)],
+            "Link": [_full_link("L00010002", "N0001", "N0002")]}
+    assert client.post("/api/path/save/qa_sync_a.json", json=data).status_code == 200
+    # 서버 상태를 빈 파일 저장으로 비움
+    assert client.post("/api/path/save/qa_sync_empty.json", json={"Node": [], "Link": []}).status_code == 200
+    assert len(client.get("/api/path/nodes").json()) == 0
+    # GET 로드 후 서버 상태가 다시 채워지는지
+    assert client.get("/api/path/load", params={"path": "qa_sync_a.json"}).status_code == 200
+    assert len(client.get("/api/path/nodes").json()) == 2
+    # 로드한 링크 삭제가 200 (이전엔 서버에 없어 500/404)
+    assert client.delete("/api/path/links/L00010002").status_code == 200

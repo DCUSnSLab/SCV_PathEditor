@@ -133,15 +133,15 @@ async def save_path_data(filename: str, path_data: PathData):
             raise HTTPException(status_code=400, detail="Node와 Link 데이터가 필요합니다")
 
         # 데이터 크기 검증 (10MB 제한)
+        # 주의: 413 HTTPException 이 직렬화 except 에 삼켜지지 않도록 크기 검사는 try 밖에서 수행
         try:
             data_json = json.dumps(path_data.dict(), ensure_ascii=False, indent=2)
             data_size = len(data_json.encode('utf-8'))
-
-            if data_size > 10 * 1024 * 1024:  # 10MB
-                raise HTTPException(status_code=413, detail="데이터가 너무 큽니다 (최대 10MB)")
-
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"데이터 직렬화 오류: {str(e)}")
+
+        if data_size > 10 * 1024 * 1024:  # 10MB
+            raise HTTPException(status_code=413, detail="데이터가 너무 큽니다 (최대 10MB)")
 
         # 디렉터리 생성 (필요시)
         target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -232,15 +232,8 @@ async def upload_file(file: UploadFile = File(...)):
 async def download_file(path: str):
     """JSON 파일 다운로드 (쿼리 파라미터 버전)"""
     try:
-        # 경로 보안 검증
+        # 경로 보안 검증 (_safe_join 이 존재/파일 여부를 보장: 없거나 폴더면 404)
         safe_path = _safe_join(path)
-
-        # 파일 존재 및 타입 검증
-        if not safe_path.exists():
-            raise HTTPException(status_code=404, detail=f"파일을 찾을 수 없습니다: {path}")
-
-        if not safe_path.is_file():
-            raise HTTPException(status_code=400, detail="폴더는 다운로드할 수 없습니다")
 
         # 파일 확장자 검증
         if not safe_path.suffix.lower() == '.json':
@@ -329,6 +322,8 @@ async def update_node_position(node_id: str, lat: float, lon: float):
         if not updated_node:
             raise HTTPException(status_code=404, detail=f"Node {node_id} not found")
         return {"message": f"Node {node_id} position updated", "node": updated_node}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -341,6 +336,8 @@ async def delete_node(node_id: str):
         if not success:
             raise HTTPException(status_code=404, detail=f"Node {node_id} not found")
         return {"message": f"Node {node_id} deleted successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -397,6 +394,8 @@ async def delete_link(link_id: str):
         if not success:
             raise HTTPException(status_code=404, detail=f"Link {link_id} not found")
         return {"message": f"Link {link_id} deleted successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -510,7 +509,15 @@ async def load_file_rel(rel_path: str, response: Response):
     try:
         fp = _safe_join(rel_path)
         with fp.open("r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        # 서버 인메모리 상태 동기화: 이후 노드/링크 삭제·위치변경 API가 이 상태를 사용하므로
+        # GET 로드 시에도 current_nodes/current_links 를 채워 프런트와 일치시킨다.
+        try:
+            path_service.current_nodes = [Node(**n) for n in data.get("Node", [])]
+            path_service.current_links = [Link(**l) for l in data.get("Link", [])]
+        except Exception:
+            pass  # 파싱 실패해도 원본 데이터 반환은 유지(서버 상태만 갱신 생략)
+        return data
     except HTTPException:
         raise
     except Exception as e:
