@@ -68,6 +68,19 @@ class PathAPI {
         });
     }
 
+    async listOverview() {
+        // 각 파일 첫 노드 좌표 + 요약 (지도 기반 불러오기용)
+        return await this.request(`/overview?_=${Date.now()}`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
+        });
+    }
+
     async loadPathData(filename) {
         const rel = String(filename).replace(/^\/+/, '');
         const q = encodeURIComponent(rel);

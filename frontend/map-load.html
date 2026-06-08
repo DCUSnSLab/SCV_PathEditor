@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCV Path Editor — 지도로 불러오기</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="icon" href="data:,">
+    <style>
+        html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, sans-serif; }
+        #toolbar {
+            height: 48px; display: flex; align-items: center; gap: 12px;
+            padding: 0 16px; background: #2c3e50; color: #fff; box-sizing: border-box;
+        }
+        #toolbar .title { font-weight: 600; }
+        #toolbar .count { margin-left: auto; font-size: 13px; opacity: .85; }
+        #toolbar a.btn {
+            background: #3498db; color: #fff; text-decoration: none; padding: 6px 12px;
+            border-radius: 6px; font-size: 13px;
+        }
+        #map { height: calc(100% - 48px); width: 100%; }
+        .pin-popup strong { display: block; margin-bottom: 4px; word-break: break-all; }
+        .pin-popup .meta { color: #555; font-size: 12px; margin-bottom: 8px; }
+        .pin-popup button {
+            background: #27ae60; color: #fff; border: none; padding: 6px 12px;
+            border-radius: 6px; cursor: pointer; font-size: 13px;
+        }
+        #status { position: absolute; bottom: 12px; left: 12px; background: rgba(0,0,0,.6);
+            color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; z-index: 1000; }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <span class="title">🗺️ 지도로 경로 불러오기</span>
+        <span class="count" id="count">로딩 중…</span>
+        <a class="btn" id="toEditor" href="index.html">에디터로 이동</a>
+    </div>
+    <div id="map"></div>
+    <div id="status" style="display:none"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/map-load.js"></script>
+</body>
+</html>

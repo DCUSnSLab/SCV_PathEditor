@@ -87,6 +87,50 @@ async def list_files_meta(response: Response):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/overview")
+async def files_overview(response: Response):
+    """
+    각 .json 경로 파일의 '첫 노드' 좌표와 요약을 반환 (지도 기반 불러오기용).
+    [{ "path": "mando/d2.json", "lat": 35.9, "lng": 128.8, "nodeCount": 18, "linkCount": 17 }]
+    - 노드가 없거나 첫 노드에 유효한 GPS 좌표가 없는 파일은 제외(파싱 실패도 건너뜀).
+    """
+    base = Path(path_service.data_dir).resolve()
+
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
+    try:
+        items = []
+        for p in base.rglob("*.json"):
+            if not p.is_file():
+                continue
+            try:
+                with p.open("r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                continue  # 손상/비-JSON 파일은 건너뜀
+            nodes = data.get("Node") or []
+            links = data.get("Link") or []
+            if not nodes:
+                continue
+            gps = nodes[0].get("GpsInfo") or {}
+            lat, lng = gps.get("Lat"), gps.get("Long")
+            if not isinstance(lat, (int, float)) or not isinstance(lng, (int, float)):
+                continue
+            items.append({
+                "path": p.relative_to(base).as_posix(),
+                "lat": lat,
+                "lng": lng,
+                "nodeCount": len(nodes),
+                "linkCount": len(links),
+            })
+        items.sort(key=lambda x: x["path"])
+        return items
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/load/{filename}", response_model=PathData)
 async def load_path_data(filename: str):
     """JSON 파일에서 경로 데이터 로드"""
