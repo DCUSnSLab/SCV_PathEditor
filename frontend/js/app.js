@@ -33,9 +33,15 @@ class SCVPathEditor {
             
             // 초기 파일 목록 로드
             await this.ui.loadFileList();
-            
-            // 예시 데이터 로드 시도
-            await this.loadExampleData();
+
+            // 지도 기반 불러오기 페이지에서 ?load=<path> 로 진입하면 해당 path 자동 로드
+            const loadParam = new URLSearchParams(window.location.search).get('load');
+            if (loadParam) {
+                await this.ui.loadPathData(loadParam);
+            } else {
+                // 예시 데이터 로드 시도
+                await this.loadExampleData();
+            }
             
             this.initialized = true;
             console.log('SCV Path Editor Web 초기화 완료');

@@ -143,6 +143,24 @@ def test_download_folder_returns_404(client):
     assert client.get("/api/path/download", params={"path": "qa_dlfolder"}).status_code == 404
 
 
+def test_files_overview(client):
+    # 지도 기반 불러오기: 첫 노드 좌표 + 요약 반환, 노드 없는 파일은 제외
+    with_nodes = {"Node": [_full_node("N0001", 35.123456, 128.654321), _full_node("N0002", 35.2, 128.7)],
+                  "Link": [_full_link("L00010002", "N0001", "N0002")]}
+    assert client.post("/api/path/save/qa_ov_a.json", json=with_nodes).status_code == 200
+    assert client.post("/api/path/save/qa_ov_empty.json", json={"Node": [], "Link": []}).status_code == 200
+
+    ov = client.get("/api/path/overview")
+    assert ov.status_code == 200
+    data = ov.json()
+    entry = next((x for x in data if x["path"] == "qa_ov_a.json"), None)
+    assert entry is not None
+    assert abs(entry["lat"] - 35.123456) < 1e-6 and abs(entry["lng"] - 128.654321) < 1e-6
+    assert entry["nodeCount"] == 2 and entry["linkCount"] == 1
+    # 노드 없는 파일은 마커 대상에서 제외
+    assert all(x["path"] != "qa_ov_empty.json" for x in data)
+
+
 def test_get_load_syncs_server_state(client):
     # B3: GET /load 가 서버 인메모리 상태를 채워, 로드한 데이터의 삭제가 동작해야 함
     data = {"Node": [_full_node("N0001", 35.0, 128.0), _full_node("N0002", 35.001, 128.001)],
