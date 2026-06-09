@@ -583,6 +583,9 @@ class UIManager {
             window.pathMap.fitToData();
         }
 
+        // 밀집 노드 샘플링 적용 (마커/라벨 가시성)
+        window.pathMap.applyNodeSampling();
+
         // 지도 재구성으로 선택이 무효화되었으므로 선택 정보/버튼 상태를 동기화
         this.updateSelectedNodeInfo(null, null);
         this.updateSelectedNodeButtons();
