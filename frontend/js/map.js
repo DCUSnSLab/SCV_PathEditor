@@ -196,24 +196,47 @@ class PathMap {
 
     toggleNodeLabels(visible) {
         this.showNodeIds = visible;
-        this.nodes.forEach(nodeInfo => {
-            const marker = nodeInfo.marker;
-            const nodeId = nodeInfo.data.ID;
+        // 라벨 표시 여부는 샘플링 로직이 일괄 관리(겹침 방지 + 마스터 토글)
+        this.applyNodeSampling();
+    }
 
-            // 기존 tooltip 제거 후 새로 생성
-            marker.unbindTooltip();
+    // 현재 줌 레벨에서 화면에 표시할 노드 수 상한(줌인할수록 증가, 충분히 확대하면 전부)
+    nodeCapForZoom(z) {
+        if (z >= 18) return Infinity;
+        if (z >= 17) return 800;
+        if (z >= 16) return 400;
+        if (z >= 15) return 200;
+        if (z >= 14) return 120;
+        if (z >= 13) return 70;
+        return 40;
+    }
 
-            const label = L.tooltip({
-                permanent: visible,
-                direction: 'top',
-                offset: [0, -10],
-                className: 'node-label'
-            }).setContent(nodeId);
+    // 노드 밀집 시 줌 기반 샘플링: 마커/라벨/헤딩을 일정 간격으로만 표시.
+    // 선택된 노드는 항상 표시. 링크 라인은 그대로 유지되어 경로 형태는 보존.
+    applyNodeSampling() {
+        if (!this.nodes || this.nodes.size === 0) return;
+        const total = this.nodes.size;
+        const cap = this.nodeCapForZoom(this.map.getZoom());
+        const stride = (cap === Infinity || total <= cap) ? 1 : Math.ceil(total / cap);
 
-            marker.bindTooltip(label);
+        let i = 0;
+        this.nodes.forEach((info, id) => {
+            const show = (stride === 1) || (i % stride === 0) || this.isNodeSelected(id);
+            i++;
 
-            if (visible) {
-                marker.openTooltip();
+            const el = info.marker.getElement();
+            if (el) el.style.display = show ? '' : 'none';
+
+            // 라벨(툴팁): 표시 대상이고 마스터 토글이 켜진 경우에만
+            if (info.marker.getTooltip()) {
+                if (show && this.showNodeIds) info.marker.openTooltip();
+                else info.marker.closeTooltip();
+            }
+
+            // 헤딩 화살표도 함께 표시/숨김
+            if (info.headingMarker) {
+                const hel = info.headingMarker.getElement();
+                if (hel) hel.style.display = show ? '' : 'none';
             }
         });
     }
@@ -257,9 +280,10 @@ class PathMap {
             this.handleMapClick(e);
         });
 
-        // 줌 변경 시 마커 크기 조정
+        // 줌 변경 시 마커 크기 조정 + 밀집 노드 샘플링
         this.map.on('zoomend', () => {
             this.updateMarkerSizes();
+            this.applyNodeSampling();
         });
 
         // 전역 마우스 이벤트 (드래그용)
@@ -450,18 +474,17 @@ class PathMap {
         marker._isDraggable = false;
         marker._nodeId = ID;
 
-        // 라벨 추가
+        // 라벨 추가 (permanent 로 바인딩하고 표시 여부는 applyNodeSampling 이 open/close 로 제어)
         const label = L.tooltip({
-            permanent: this.showNodeIds, // showNodeIds 상태에 따라 permanent 설정
+            permanent: true,
             direction: 'top',
             offset: [0, -10],
             className: 'node-label'
         }).setContent(ID);
 
         marker.bindTooltip(label);
-
-        if (this.showNodeIds) {
-            marker.openTooltip();
+        if (!this.showNodeIds) {
+            marker.closeTooltip();
         }
 
         marker.on('click', (e) => {
