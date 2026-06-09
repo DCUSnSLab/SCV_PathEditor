@@ -77,6 +77,32 @@ window.openPath = function (encodedPath) {
     // ---- 경로 미리보기 라인 (읽기 전용 /download 사용, 서버 상태 미변경) ----
     function clearPreview() { if (preview) { map.removeLayer(preview); preview = null; } }
 
+    function endpointIcon(bg, label, cls) {
+        return L.divIcon({
+            className: cls,
+            html: `<div style="background:${bg};color:#fff;border:2px solid #fff;border-radius:50%;` +
+                  `width:22px;height:22px;display:flex;align-items:center;justify-content:center;` +
+                  `font-size:11px;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.45);">${label}</div>`,
+            iconSize: [22, 22], iconAnchor: [11, 11]
+        });
+    }
+
+    // 링크 방향(From→To)으로 출발(들어오는 링크 없음)·도착(나가는 링크 없음) 노드 판정.
+    // 링크가 없으면 노드 순서의 첫/마지막으로 대체.
+    function findEndpoints(nodes, links, coord) {
+        const inDeg = {}, outDeg = {};
+        links.forEach(l => { outDeg[l.FromNodeID] = (outDeg[l.FromNodeID] || 0) + 1; inDeg[l.ToNodeID] = (inDeg[l.ToNodeID] || 0) + 1; });
+        let startId = null, endId = null;
+        if (links.length) {
+            for (const n of nodes) { const id = n.ID; if ((outDeg[id] || 0) > 0 && (inDeg[id] || 0) === 0) { startId = id; break; } }
+            for (const n of nodes) { const id = n.ID; if ((inDeg[id] || 0) > 0 && (outDeg[id] || 0) === 0) { endId = id; } }
+        }
+        const withCoord = nodes.filter(n => coord[n.ID]);
+        if (!startId || !coord[startId]) startId = withCoord.length ? withCoord[0].ID : null;
+        if (!endId || !coord[endId]) endId = withCoord.length ? withCoord[withCoord.length - 1].ID : null;
+        return { startId, endId };
+    }
+
     async function showPreview(path) {
         clearPreview();
         let data = previewCache.get(path);
@@ -88,19 +114,36 @@ window.openPath = function (encodedPath) {
                 previewCache.set(path, data);
             } catch (e) { return; }
         }
+        const nodes = data.Node || [], links = data.Link || [];
         const coord = {};
-        (data.Node || []).forEach(n => { const g = n.GpsInfo || {}; if (typeof g.Lat === 'number' && typeof g.Long === 'number') coord[n.ID] = [g.Lat, g.Long]; });
+        nodes.forEach(n => { const g = n.GpsInfo || {}; if (typeof g.Lat === 'number' && typeof g.Long === 'number') coord[n.ID] = [g.Lat, g.Long]; });
+
         const segs = [];
-        (data.Link || []).forEach(l => { const a = coord[l.FromNodeID], b = coord[l.ToNodeID]; if (a && b) segs.push([a, b]); });
-        let line;
+        links.forEach(l => { const a = coord[l.FromNodeID], b = coord[l.ToNodeID]; if (a && b) segs.push([a, b]); });
+        const layers = [];
         if (segs.length) {
-            line = L.polyline(segs, { className: 'path-preview', color: '#2980b9', weight: 3, opacity: 0.85 });
+            layers.push(L.polyline(segs, { className: 'path-preview', color: '#2980b9', weight: 3, opacity: 0.85 }));
         } else {
-            const pts = (data.Node || []).map(n => coord[n.ID]).filter(Boolean);
-            if (pts.length < 2) return;
-            line = L.polyline(pts, { className: 'path-preview', color: '#2980b9', weight: 3, opacity: 0.85, dashArray: '4,6' });
+            const pts = nodes.map(n => coord[n.ID]).filter(Boolean);
+            if (pts.length < 2) {
+                // 노드가 1개뿐이면 라인 없이 출발 마커만
+                if (pts.length === 1) layers.push(L.marker(pts[0], { icon: endpointIcon('#2ecc71', '출', 'endpoint-pin start'), interactive: false }).bindTooltip('출발점'));
+                if (!layers.length) return;
+                preview = L.layerGroup(layers).addTo(map);
+                return;
+            }
+            layers.push(L.polyline(pts, { className: 'path-preview', color: '#2980b9', weight: 3, opacity: 0.85, dashArray: '4,6' }));
         }
-        preview = line.addTo(map);
+
+        // 출발/도착 마커
+        const { startId, endId } = findEndpoints(nodes, links, coord);
+        if (startId && coord[startId]) {
+            layers.push(L.marker(coord[startId], { icon: endpointIcon('#2ecc71', '출', 'endpoint-pin start'), interactive: false, zIndexOffset: 1000 }).bindTooltip('출발점', { direction: 'top' }));
+        }
+        if (endId && coord[endId] && endId !== startId) {
+            layers.push(L.marker(coord[endId], { icon: endpointIcon('#c0392b', '도', 'endpoint-pin end'), interactive: false, zIndexOffset: 1000 }).bindTooltip('도착점', { direction: 'top' }));
+        }
+        preview = L.layerGroup(layers).addTo(map);
     }
 
     // popupopen/close 는 map 에서 발생 (군집 내 마커 포함). 소스 마커의 _path 로 미리보기 토글
