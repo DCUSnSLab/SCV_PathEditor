@@ -161,6 +161,26 @@ def test_files_overview(client):
     assert all(x["path"] != "qa_ov_empty.json" for x in data)
 
 
+def test_overview_cache_reflects_changes(client):
+    import os, time
+    save = lambda body: client.post("/api/path/save/qa_cache.json", json=body)
+    assert save({"Node": [_full_node("N0001", 35.0, 128.0)], "Link": []}).status_code == 200
+    e = next((x for x in client.get("/api/path/overview").json() if x["path"] == "qa_cache.json"), None)
+    assert e and e["nodeCount"] == 1 and e["linkCount"] == 0
+
+    # 내용 변경(노드 2/링크 1) + mtime 갱신 → 캐시 무효화되어 새 요약 반환
+    assert save({"Node": [_full_node("N0001", 35.0, 128.0), _full_node("N0002", 35.1, 128.1)],
+                 "Link": [_full_link("L00010002", "N0001", "N0002")]}).status_code == 200
+    fp = os.path.join(os.environ["APP_DATA_DIR"], "qa_cache.json")
+    os.utime(fp, (time.time() + 10, time.time() + 10))
+    e2 = next((x for x in client.get("/api/path/overview").json() if x["path"] == "qa_cache.json"), None)
+    assert e2 and e2["nodeCount"] == 2 and e2["linkCount"] == 1
+
+    # 삭제 후 overview(캐시)에서 제거
+    assert client.post("/api/path/files/delete", json={"path": "qa_cache.json"}).status_code == 200
+    assert all(x["path"] != "qa_cache.json" for x in client.get("/api/path/overview").json())
+
+
 def test_get_load_syncs_server_state(client):
     # B3: GET /load 가 서버 인메모리 상태를 채워, 로드한 데이터의 삭제가 동작해야 함
     data = {"Node": [_full_node("N0001", 35.0, 128.0), _full_node("N0002", 35.001, 128.001)],

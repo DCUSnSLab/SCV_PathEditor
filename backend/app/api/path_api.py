@@ -87,12 +87,41 @@ async def list_files_meta(response: Response):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# /overview 결과 캐시: rel_path -> (mtime, summary|None)
+# 파일 mtime 이 그대로면 재파싱 없이 재사용 (지도 불러오기 페이지 재방문 성능 개선).
+_overview_cache: dict = {}
+
+
+def _parse_overview_entry(p: Path, rel: str):
+    """파일에서 첫 노드 좌표 + 요약 추출. 유효 좌표 없으면 None."""
+    try:
+        with p.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return None
+    nodes = data.get("Node") or []
+    if not nodes:
+        return None
+    gps = nodes[0].get("GpsInfo") or {}
+    lat, lng = gps.get("Lat"), gps.get("Long")
+    if not isinstance(lat, (int, float)) or not isinstance(lng, (int, float)):
+        return None
+    return {
+        "path": rel,
+        "lat": lat,
+        "lng": lng,
+        "nodeCount": len(nodes),
+        "linkCount": len(data.get("Link") or []),
+    }
+
+
 @router.get("/overview")
 async def files_overview(response: Response):
     """
     각 .json 경로 파일의 '첫 노드' 좌표와 요약을 반환 (지도 기반 불러오기용).
     [{ "path": "mando/d2.json", "lat": 35.9, "lng": 128.8, "nodeCount": 18, "linkCount": 17 }]
     - 노드가 없거나 첫 노드에 유효한 GPS 좌표가 없는 파일은 제외(파싱 실패도 건너뜀).
+    - 파일 mtime 기반 캐시로 변경되지 않은 파일은 재파싱하지 않음.
     """
     base = Path(path_service.data_dir).resolve()
 
@@ -102,29 +131,27 @@ async def files_overview(response: Response):
 
     try:
         items = []
+        seen = set()
         for p in base.rglob("*.json"):
             if not p.is_file():
                 continue
+            rel = p.relative_to(base).as_posix()
+            seen.add(rel)
             try:
-                with p.open("r", encoding="utf-8") as f:
-                    data = json.load(f)
-            except Exception:
-                continue  # 손상/비-JSON 파일은 건너뜀
-            nodes = data.get("Node") or []
-            links = data.get("Link") or []
-            if not nodes:
+                mtime = p.stat().st_mtime
+            except OSError:
                 continue
-            gps = nodes[0].get("GpsInfo") or {}
-            lat, lng = gps.get("Lat"), gps.get("Long")
-            if not isinstance(lat, (int, float)) or not isinstance(lng, (int, float)):
-                continue
-            items.append({
-                "path": p.relative_to(base).as_posix(),
-                "lat": lat,
-                "lng": lng,
-                "nodeCount": len(nodes),
-                "linkCount": len(links),
-            })
+            cached = _overview_cache.get(rel)
+            if cached and cached[0] == mtime:
+                entry = cached[1]
+            else:
+                entry = _parse_overview_entry(p, rel)
+                _overview_cache[rel] = (mtime, entry)
+            if entry:
+                items.append(entry)
+        # 삭제된 파일은 캐시에서 정리
+        for stale in [k for k in _overview_cache if k not in seen]:
+            _overview_cache.pop(stale, None)
         items.sort(key=lambda x: x["path"])
         return items
     except Exception as e:
@@ -179,7 +206,7 @@ async def save_path_data(filename: str, path_data: PathData):
         # 데이터 크기 검증 (10MB 제한)
         # 주의: 413 HTTPException 이 직렬화 except 에 삼켜지지 않도록 크기 검사는 try 밖에서 수행
         try:
-            data_json = json.dumps(path_data.dict(), ensure_ascii=False, indent=2)
+            data_json = json.dumps(path_data.model_dump(), ensure_ascii=False, indent=2)
             data_size = len(data_json.encode('utf-8'))
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"데이터 직렬화 오류: {str(e)}")

@@ -73,8 +73,8 @@ class PathService:
         
         # Pydantic 모델을 dict로 변환
         data = {
-            "Node": [node.dict() for node in path_data.Node],
-            "Link": [link.dict() for link in path_data.Link]
+            "Node": [node.model_dump() for node in path_data.Node],
+            "Link": [link.model_dump() for link in path_data.Link]
         }
         
         with open(file_path, 'w', encoding='utf-8') as f:
@@ -96,7 +96,7 @@ class PathService:
         
         new_node = Node(
             ID=node_id,
-            **node_data.dict()
+            **node_data.model_dump()
         )
         
         self.current_nodes.append(new_node)
