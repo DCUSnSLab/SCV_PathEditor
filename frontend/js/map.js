@@ -207,8 +207,11 @@ class PathMap {
     // 선택된 노드는 항상 표시(편집 접근성), 링크 라인은 그대로 유지되어 경로 형태는 보존.
     applyNodeSampling() {
         if (!this.nodes || this.nodes.size === 0) return;
-        const SAMPLE_MIN_PX = 38;     // 라벨 겹침 방지 최소 간격(px)
-        const minSq = SAMPLE_MIN_PX * SAMPLE_MIN_PX;
+        // 겹침 판정 기준: 라벨 표시 중이면 라벨 박스(약 41x25px)+여백, 아니면 마커 점 간격.
+        // 라벨은 가로가 더 넓으므로 사각형(AABB) 충돌로 정확히 판정(가로 간격 ↑, 세로 간격 ↓).
+        const labelsOn = this.showNodeIds;
+        const minX = labelsOn ? 46 : 18;
+        const minY = labelsOn ? 26 : 18;
 
         const setVisible = (info, show) => {
             const el = info.marker.getElement();
@@ -226,8 +229,8 @@ class PathMap {
         const shown = [];  // 표시 확정된 노드의 화면 좌표 {x, y}
         const farEnough = (pt) => {
             for (let k = 0; k < shown.length; k++) {
-                const dx = shown[k].x - pt.x, dy = shown[k].y - pt.y;
-                if (dx * dx + dy * dy < minSq) return false;
+                // 두 라벨 박스가 가로/세로 모두 겹치면 충돌(숨김)
+                if (Math.abs(shown[k].x - pt.x) < minX && Math.abs(shown[k].y - pt.y) < minY) return false;
             }
             return true;
         };
