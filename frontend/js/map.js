@@ -200,45 +200,58 @@ class PathMap {
         this.applyNodeSampling();
     }
 
-    // 현재 줌 레벨에서 화면에 표시할 노드 수 상한(줌인할수록 증가, 충분히 확대하면 전부)
-    nodeCapForZoom(z) {
-        if (z >= 18) return Infinity;
-        if (z >= 17) return 800;
-        if (z >= 16) return 400;
-        if (z >= 15) return 200;
-        if (z >= 14) return 120;
-        if (z >= 13) return 70;
-        return 40;
-    }
-
-    // 노드 밀집 시 줌 기반 샘플링: 마커/라벨/헤딩을 일정 간격으로만 표시.
-    // 선택된 노드는 항상 표시. 링크 라인은 그대로 유지되어 경로 형태는 보존.
+    // 노드 밀집 시 '화면 픽셀 근접도' 기반 솎기.
+    // 이미 표시된 노드와 SAMPLE_MIN_PX 이내로 겹치는 노드의 마커/라벨/헤딩을 숨긴다.
+    // 지리적 줌 레벨이 아니라 화면상 거리 기준이므로 어떤 줌(기본 fit 포함)에서도 동작하고,
+    // 확대하면 노드 간 픽셀 거리가 멀어져 더 많은 노드가 드러난다.
+    // 선택된 노드는 항상 표시(편집 접근성), 링크 라인은 그대로 유지되어 경로 형태는 보존.
     applyNodeSampling() {
         if (!this.nodes || this.nodes.size === 0) return;
-        const total = this.nodes.size;
-        const cap = this.nodeCapForZoom(this.map.getZoom());
-        const stride = (cap === Infinity || total <= cap) ? 1 : Math.ceil(total / cap);
+        const SAMPLE_MIN_PX = 38;     // 라벨 겹침 방지 최소 간격(px)
+        const minSq = SAMPLE_MIN_PX * SAMPLE_MIN_PX;
 
-        let i = 0;
-        this.nodes.forEach((info, id) => {
-            const show = (stride === 1) || (i % stride === 0) || this.isNodeSelected(id);
-            i++;
-
+        const setVisible = (info, show) => {
             const el = info.marker.getElement();
             if (el) el.style.display = show ? '' : 'none';
-
-            // 라벨(툴팁): 표시 대상이고 마스터 토글이 켜진 경우에만
             if (info.marker.getTooltip()) {
                 if (show && this.showNodeIds) info.marker.openTooltip();
                 else info.marker.closeTooltip();
             }
-
-            // 헤딩 화살표도 함께 표시/숨김
             if (info.headingMarker) {
                 const hel = info.headingMarker.getElement();
                 if (hel) hel.style.display = show ? '' : 'none';
             }
+        };
+
+        const shown = [];  // 표시 확정된 노드의 화면 좌표 {x, y}
+        const farEnough = (pt) => {
+            for (let k = 0; k < shown.length; k++) {
+                const dx = shown[k].x - pt.x, dy = shown[k].y - pt.y;
+                if (dx * dx + dy * dy < minSq) return false;
+            }
+            return true;
+        };
+
+        // 1차: 선택된 노드는 무조건 표시(우선 자리 확보)
+        const deferred = [];
+        this.nodes.forEach((info, id) => {
+            const pt = this.map.latLngToContainerPoint(info.marker.getLatLng());
+            if (this.isNodeSelected(id)) {
+                setVisible(info, true);
+                shown.push(pt);
+            } else {
+                deferred.push({ info, pt });
+            }
         });
+        // 2차: 나머지는 근접도 검사 후 표시
+        for (const { info, pt } of deferred) {
+            if (farEnough(pt)) {
+                setVisible(info, true);
+                shown.push(pt);
+            } else {
+                setVisible(info, false);
+            }
+        }
     }
 
     initMap() {
