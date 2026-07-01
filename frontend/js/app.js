@@ -38,6 +38,9 @@ class SCVPathEditor {
             const loadParam = new URLSearchParams(window.location.search).get('load');
             if (loadParam) {
                 await this.ui.loadPathData(loadParam);
+                // 파일 탐색기 트리에도 선택 상태를 반영 → 다운로드/이름변경/삭제 등
+                // selectedFile 기반 기능이 트리 클릭 없이도 정상 동작하도록 함
+                this.ui.fileExplorer?.selectFileByPath(loadParam);
             } else {
                 // 예시 데이터 로드 시도
                 await this.loadExampleData();

@@ -225,7 +225,8 @@ class FileExplorer {
         item.className = `file-item ${node.type}`;
         item.dataset.level = level;
         item.dataset.type = node.type;
-        
+        item.dataset.fullpath = node.fullPath || ''; // selectFileByPath 에서 정확한 매칭용
+
         if (node.type === 'folder') {
             item.dataset.expanded = node.expanded || false;
         }
@@ -576,10 +577,44 @@ class FileExplorer {
         return this.selectedFile;
     }
 
-    // 특정 파일 선택
+    // 트리 구조에서 fullPath 가 일치하는 파일 노드를 재귀 탐색
+    findNodeByPath(node, path) {
+        if (node.type !== 'folder' && node.fullPath === path) return node;
+        if (node.children) {
+            for (const child of node.children) {
+                const found = this.findNodeByPath(child, path);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+
+    // 경로로 특정 파일을 트리에서 선택 상태로 만든다 (지도로 불러오기 등 트리 클릭을 거치지
+    // 않고 파일이 로드된 경우, 다운로드/이름변경/삭제 등 selectedFile 기반 기능이 동작하도록 함)
     selectFileByPath(filepath) {
-        // TODO: 경로로 파일 선택 구현
-        console.log('파일 선택:', filepath);
+        if (!filepath || !this.treeData) return;
+
+        const targetNode = this.findNodeByPath(this.treeData, filepath);
+        if (!targetNode) {
+            console.warn('selectFileByPath: 트리에서 파일을 찾을 수 없습니다:', filepath);
+            return;
+        }
+
+        // 파일이 위치한 폴더로 이동해 파일이 현재 뷰의 최상단에 바로 보이도록 함
+        const folder = filepath.includes('/') ? filepath.split('/').slice(0, -1).join('/') : '';
+        this.currentFolder = folder;
+        this.saveExplorerState();
+        this.renderFileTree(this.treeData);
+
+        // 렌더된 DOM에서 해당 파일 항목을 찾아 선택 상태 적용(강조 표시 + selectedFile 설정)
+        const items = this.container.querySelectorAll('.file-item');
+        for (const item of items) {
+            if (item.dataset.fullpath === filepath) {
+                this.selectFile(item, targetNode);
+                item.scrollIntoView({ block: 'center' });
+                break;
+            }
+        }
     }
 
     async deleteSelectedFile() {
