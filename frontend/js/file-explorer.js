@@ -15,7 +15,10 @@ class FileExplorer {
     init() {
         this.createContextMenu();
         this.setupEventListeners();
-        this.loadFileTree();
+        // 최초 트리 로드는 호출하지 않는다 — UIManager 가 항상 loadFileList() 를 통해
+        // 명시적으로 await 호출한다(app.js). 여기서도 중복 호출(await 없는 fire-and-forget)하면
+        // 두 호출이 경합하여, 나중에 끝나는 쪽이 선택 상태 없이 트리를 다시 그려 방금 적용한
+        // 파일 선택(selectFileByPath 등)이 사라지는 버그가 있었다.
     }
 
     createContextMenu() {
@@ -257,6 +260,13 @@ class FileExplorer {
         }
 
         item.innerHTML = html;
+
+        // 현재 선택된 파일이면 재렌더링 후에도 강조 표시를 유지한다(트리를 다시 그리는 모든
+        // 경로 — 새로고침/업로드/이름변경/이동/삭제/경합하는 초기 로드 등 — 에서 선택이
+        // 시각적으로 사라지지 않도록 함).
+        if (node.type !== 'folder' && this.selectedFile && node.fullPath === this.selectedFile.fullPath) {
+            item.classList.add('selected');
+        }
 
         // 이벤트 리스너
         this.setupFileItemEvents(item, node);
