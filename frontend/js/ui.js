@@ -104,6 +104,12 @@ class UIManager {
             }
         });
 
+        document.getElementById('toggleEndpoints').addEventListener('change', (e) => {
+            if (window.pathMap) {
+                window.pathMap.toggleEndpointMarkers(e.target.checked);
+            }
+        });
+
         document.getElementById('mapStyleSelect').addEventListener('change', (e) => {
             if (window.pathMap) {
                 window.pathMap.setMapStyle(e.target.value);
@@ -585,6 +591,9 @@ class UIManager {
 
         // 밀집 노드 샘플링 적용 (마커/라벨 가시성)
         window.pathMap.applyNodeSampling();
+
+        // 출발/도착점 표시 갱신 (명확한 경우에만; 지도로 불러오기 미리보기와 동일 로직)
+        window.pathMap.refreshEndpointMarkers();
 
         // 지도 재구성으로 선택이 무효화되었으므로 선택 정보/버튼 상태를 동기화
         this.updateSelectedNodeInfo(null, null);
