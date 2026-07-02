@@ -34,7 +34,14 @@ class PathMap {
         this.selectionStartLatLng = null;
 
         this.showNodeIds = true; // 노드 ID 표시 여부 플래그
-        
+
+        // 출발/도착점 표시(비침투적 마커, 명확한 경우에만)
+        this.showEndpoints = true;
+        this.startMarker = null;
+        this.endMarker = null;
+        this._endpointStartId = null;
+        this._endpointEndId = null;
+
         this.initMap();
     }
 
@@ -563,10 +570,17 @@ class PathMap {
             this.map.removeLayer(nodeInfo.marker);
             if (nodeInfo.headingMarker) this.map.removeLayer(nodeInfo.headingMarker);
             this.nodes.delete(nodeId);
-            
+
             // 선택된 노드였다면 선택 해제
             if (this.selectedNode === nodeId) {
                 this.selectedNode = null;
+            }
+
+            // 출발/도착 마커가 이 노드를 가리키고 있었다면 함께 정리(더 이상 유효하지 않음)
+            if (nodeId === this._endpointStartId || nodeId === this._endpointEndId) {
+                if (this.startMarker) { this.map.removeLayer(this.startMarker); this.startMarker = null; }
+                if (this.endMarker) { this.map.removeLayer(this.endMarker); this.endMarker = null; }
+                this._endpointStartId = this._endpointEndId = null;
             }
         }
     }
@@ -920,6 +934,86 @@ class PathMap {
         this.selectedNode = null;
         this.selectedNodes.clear(); // 지도 재구성 시 복수 선택 상태도 초기화 (stale 선택 방지)
         this.quickLinkFirstNode = null;
+
+        // 출발/도착 마커 정리 (다음 렌더에서 refreshEndpointMarkers 가 다시 계산)
+        if (this.startMarker) { this.map.removeLayer(this.startMarker); this.startMarker = null; }
+        if (this.endMarker) { this.map.removeLayer(this.endMarker); this.endMarker = null; }
+        this._endpointStartId = this._endpointEndId = null;
+    }
+
+    // ---- 출발/도착점 표시 ----
+    // 링크 방향(From→To)으로 출발(들어오는 링크 없음)·도착(나가는 링크 없음) 노드 후보를 찾는다.
+    // 후보가 정확히 1개씩일 때만 '명확'하다고 보고 표시한다. 순환 구조(후보 0개)나 분기/합류가
+    // 있는 도로망(후보 2개 이상)에서는 임의로 하나를 골라 보여주면 오해를 줄 수 있어 표시하지 않는다.
+    // map-load.html(지도로 불러오기)의 동일 로직/색상과 시각 언어를 통일한다.
+    refreshEndpointMarkers() {
+        if (this.startMarker) { this.map.removeLayer(this.startMarker); this.startMarker = null; }
+        if (this.endMarker) { this.map.removeLayer(this.endMarker); this.endMarker = null; }
+        this._endpointStartId = this._endpointEndId = null;
+        if (!this.showEndpoints || this.nodes.size === 0) return;
+
+        const inDeg = {}, outDeg = {};
+        this.links.forEach(({ data: l }) => {
+            outDeg[l.FromNodeID] = (outDeg[l.FromNodeID] || 0) + 1;
+            inDeg[l.ToNodeID] = (inDeg[l.ToNodeID] || 0) + 1;
+        });
+
+        let startId = null, endId = null, ambiguous = false;
+        if (this.links.size === 0) {
+            if (this.nodes.size === 1) {
+                startId = this.nodes.keys().next().value;
+            } else {
+                ambiguous = true; // 링크 없는 노드가 여럿이면 순서만으로 판단하지 않음
+            }
+        } else {
+            const starts = [], ends = [];
+            this.nodes.forEach((info, id) => {
+                if ((outDeg[id] || 0) > 0 && (inDeg[id] || 0) === 0) starts.push(id);
+                if ((inDeg[id] || 0) > 0 && (outDeg[id] || 0) === 0) ends.push(id);
+            });
+            if (starts.length === 1 && ends.length === 1) {
+                startId = starts[0];
+                endId = ends[0];
+            } else {
+                ambiguous = true;
+            }
+        }
+        if (ambiguous) return;
+
+        const place = (id, bg, label, cls, tooltip) => {
+            const entry = this.nodes.get(id);
+            if (!entry) return null;
+            return L.marker(entry.marker.getLatLng(), {
+                icon: this._makeEndpointIcon(bg, label, cls),
+                interactive: false,
+                keyboard: false,
+                zIndexOffset: 1000,
+            }).bindTooltip(tooltip, { direction: 'top' }).addTo(this.map);
+        };
+
+        if (startId) {
+            this.startMarker = place(startId, '#2ecc71', '출', 'endpoint-pin start', '출발점');
+            this._endpointStartId = startId;
+        }
+        if (endId && endId !== startId) {
+            this.endMarker = place(endId, '#c0392b', '도', 'endpoint-pin end', '도착점');
+            this._endpointEndId = endId;
+        }
+    }
+
+    _makeEndpointIcon(bg, label, cls) {
+        return L.divIcon({
+            className: cls,
+            html: `<div style="background:${bg};color:#fff;border:2px solid #fff;border-radius:50%;` +
+                  `width:22px;height:22px;display:flex;align-items:center;justify-content:center;` +
+                  `font-size:11px;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.45);">${label}</div>`,
+            iconSize: [22, 22], iconAnchor: [11, 11]
+        });
+    }
+
+    toggleEndpointMarkers(visible) {
+        this.showEndpoints = visible;
+        this.refreshEndpointMarkers();
     }
 
     fitToData() {

@@ -31,6 +31,7 @@ window.openPath = function (encodedPath) {
     const searchBox = document.getElementById('searchBox');
     const folderFilter = document.getElementById('folderFilter');
     const favOnly = document.getElementById('favOnly');
+    const clearPreviewBtn = document.getElementById('clearPreviewBtn');
     const showStatus = (msg) => { statusEl.style.display = msg ? 'block' : 'none'; statusEl.textContent = msg || ''; };
 
     function escapeHtml(s) {
@@ -51,7 +52,7 @@ window.openPath = function (encodedPath) {
 
     function markerColor(p) { return isFav(p) ? '#f1c40f' : '#e74c3c'; }
 
-    function buildPopup(it) {
+    function buildPopup(it, note) {
         const fav = isFav(it.path);
         return `
             <div class="pin-popup">
@@ -61,6 +62,7 @@ window.openPath = function (encodedPath) {
                 <button onclick="openPath('${encodeURIComponent(it.path)}')">📂 이 경로 열기</button>
                 <button onclick="toggleFav('${encodeURIComponent(it.path)}')" style="background:#f39c12;margin-left:6px;">
                     ${fav ? '★ 즐겨찾기 해제' : '☆ 즐겨찾기'}</button>
+                ${note || ''}
             </div>`;
     }
 
@@ -75,7 +77,14 @@ window.openPath = function (encodedPath) {
     }
 
     // ---- 경로 미리보기 라인 (읽기 전용 /download 사용, 서버 상태 미변경) ----
-    function clearPreview() { if (preview) { map.removeLayer(preview); preview = null; } }
+    // 팝업을 닫아도 미리보기는 유지된다(사용자가 팝업 없이 경로를 살펴볼 수 있도록).
+    // 다른 마커를 클릭하면 그 경로로 교체되고, 명시적으로 '미리보기 닫기' 버튼을 눌러야 사라진다.
+    function clearPreview() {
+        if (preview) { map.removeLayer(preview); preview = null; }
+        if (clearPreviewBtn) clearPreviewBtn.style.display = 'none';
+    }
+
+    if (clearPreviewBtn) clearPreviewBtn.addEventListener('click', clearPreview);
 
     function endpointIcon(bg, label, cls) {
         return L.divIcon({
@@ -87,24 +96,27 @@ window.openPath = function (encodedPath) {
         });
     }
 
-    // 링크 방향(From→To)으로 출발(들어오는 링크 없음)·도착(나가는 링크 없음) 노드 판정.
-    // 링크가 없으면 노드 순서의 첫/마지막으로 대체.
-    function findEndpoints(nodes, links, coord) {
+    // 링크 방향(From→To)으로 출발(들어오는 링크 없음)·도착(나가는 링크 없음) 노드 후보를 찾는다.
+    // 후보가 정확히 1개씩일 때만 '명확'하다고 보고 표시한다. 순환 구조(후보 0개)나 분기/합류가
+    // 있는 도로망(후보 2개 이상)에서는 임의로 하나를 골라 보여주면 오해를 줄 수 있어 표시하지 않는다.
+    function computeEndpoints(nodes, links) {
+        if (!links.length) {
+            // 링크가 없는 경우: 노드가 1개뿐이면 그 점 자체가 유일한 지점이므로 명확, 그 외엔 판단 불가
+            return nodes.length === 1
+                ? { startId: nodes[0].ID, endId: null, ambiguous: false }
+                : { startId: null, endId: null, ambiguous: nodes.length > 1 };
+        }
         const inDeg = {}, outDeg = {};
         links.forEach(l => { outDeg[l.FromNodeID] = (outDeg[l.FromNodeID] || 0) + 1; inDeg[l.ToNodeID] = (inDeg[l.ToNodeID] || 0) + 1; });
-        let startId = null, endId = null;
-        if (links.length) {
-            for (const n of nodes) { const id = n.ID; if ((outDeg[id] || 0) > 0 && (inDeg[id] || 0) === 0) { startId = id; break; } }
-            for (const n of nodes) { const id = n.ID; if ((inDeg[id] || 0) > 0 && (outDeg[id] || 0) === 0) { endId = id; } }
+        const starts = nodes.filter(n => (outDeg[n.ID] || 0) > 0 && (inDeg[n.ID] || 0) === 0);
+        const ends = nodes.filter(n => (inDeg[n.ID] || 0) > 0 && (outDeg[n.ID] || 0) === 0);
+        if (starts.length === 1 && ends.length === 1) {
+            return { startId: starts[0].ID, endId: ends[0].ID, ambiguous: false };
         }
-        const withCoord = nodes.filter(n => coord[n.ID]);
-        if (!startId || !coord[startId]) startId = withCoord.length ? withCoord[0].ID : null;
-        if (!endId || !coord[endId]) endId = withCoord.length ? withCoord[withCoord.length - 1].ID : null;
-        return { startId, endId };
+        return { startId: null, endId: null, ambiguous: true };
     }
 
-    async function showPreview(path) {
-        clearPreview();
+    async function showPreview(path, sourceMarker) {
         let data = previewCache.get(path);
         if (!data) {
             try {
@@ -121,34 +133,55 @@ window.openPath = function (encodedPath) {
         const segs = [];
         links.forEach(l => { const a = coord[l.FromNodeID], b = coord[l.ToNodeID]; if (a && b) segs.push([a, b]); });
         const layers = [];
+        let hasLine = false;
         if (segs.length) {
             layers.push(L.polyline(segs, { className: 'path-preview', color: '#2980b9', weight: 3, opacity: 0.85 }));
+            hasLine = true;
         } else {
             const pts = nodes.map(n => coord[n.ID]).filter(Boolean);
-            if (pts.length < 2) {
-                // 노드가 1개뿐이면 라인 없이 출발 마커만
-                if (pts.length === 1) layers.push(L.marker(pts[0], { icon: endpointIcon('#2ecc71', '출', 'endpoint-pin start'), interactive: false }).bindTooltip('출발점'));
-                if (!layers.length) return;
-                preview = L.layerGroup(layers).addTo(map);
-                return;
+            if (pts.length >= 2) {
+                layers.push(L.polyline(pts, { className: 'path-preview', color: '#2980b9', weight: 3, opacity: 0.85, dashArray: '4,6' }));
+                hasLine = true;
             }
-            layers.push(L.polyline(pts, { className: 'path-preview', color: '#2980b9', weight: 3, opacity: 0.85, dashArray: '4,6' }));
         }
 
-        // 출발/도착 마커
-        const { startId, endId } = findEndpoints(nodes, links, coord);
-        if (startId && coord[startId]) {
-            layers.push(L.marker(coord[startId], { icon: endpointIcon('#2ecc71', '출', 'endpoint-pin start'), interactive: false, zIndexOffset: 1000 }).bindTooltip('출발점', { direction: 'top' }));
+        // 출발/도착 마커 (명확한 경우에만)
+        const { startId, endId, ambiguous } = computeEndpoints(nodes, links);
+        if (!ambiguous) {
+            if (startId && coord[startId]) {
+                layers.push(L.marker(coord[startId], { icon: endpointIcon('#2ecc71', '출', 'endpoint-pin start'), interactive: false, zIndexOffset: 1000 }).bindTooltip('출발점', { direction: 'top' }));
+            }
+            if (endId && coord[endId] && endId !== startId) {
+                layers.push(L.marker(coord[endId], { icon: endpointIcon('#c0392b', '도', 'endpoint-pin end'), interactive: false, zIndexOffset: 1000 }).bindTooltip('도착점', { direction: 'top' }));
+            }
         }
-        if (endId && coord[endId] && endId !== startId) {
-            layers.push(L.marker(coord[endId], { icon: endpointIcon('#c0392b', '도', 'endpoint-pin end'), interactive: false, zIndexOffset: 1000 }).bindTooltip('도착점', { direction: 'top' }));
-        }
+        if (!layers.length) return;
+
+        // 새 미리보기가 준비된 시점에만 이전 것을 교체(로딩 중 깜빡임/공백 방지)
+        clearPreview();
         preview = L.layerGroup(layers).addTo(map);
+        if (clearPreviewBtn) {
+            clearPreviewBtn.style.display = 'inline-block';
+            clearPreviewBtn.textContent = '✕ 미리보기 닫기 (' + path.split('/').pop() + ')';
+        }
+
+        // 순환/분기 등으로 출발·도착이 명확하지 않으면 팝업에 안내를 덧붙인다
+        if (ambiguous && hasLine && sourceMarker) {
+            const entry = byPath.get(path);
+            if (entry) {
+                const note = '<div style="color:#c0392b;font-size:11px;margin-top:6px;">⚠ 출발/도착점이 명확하지 않은 경로입니다(순환·분기 구조)</div>';
+                sourceMarker.setPopupContent(buildPopup(entry.item, note));
+            }
+        }
     }
 
-    // popupopen/close 는 map 에서 발생 (군집 내 마커 포함). 소스 마커의 _path 로 미리보기 토글
-    map.on('popupopen', (e) => { const p = e.popup && e.popup._source && e.popup._source._filePath; if (p) showPreview(p); });
-    map.on('popupclose', () => clearPreview());
+    // popupopen 은 map 에서 발생(군집 내 마커 포함). 소스 마커의 _filePath 로 미리보기 표시.
+    // popupclose 에서는 더 이상 미리보기를 지우지 않는다 — 팝업을 닫아도 경로를 계속 볼 수 있도록.
+    map.on('popupopen', (e) => {
+        const src = e.popup && e.popup._source;
+        const p = src && src._filePath;
+        if (p) showPreview(p, src);
+    });
 
     // ---- 즐겨찾기 토글 (팝업 버튼) ----
     window.toggleFav = function (encodedPath) {
