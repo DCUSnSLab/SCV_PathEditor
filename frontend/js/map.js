@@ -35,6 +35,11 @@ class PathMap {
 
         this.showNodeIds = true; // 노드 ID 표시 여부 플래그
 
+        // 밀집 노드 샘플링 강제 해제 플래그 — 켜면 겹치더라도 모든 노드/라벨을 표시.
+        // 기본은 끔(false): 기존 샘플링 동작 유지. 조밀한 경로(예: 1m 간격 GPS 로그)를
+        // 포괄적으로 점검해야 할 때 사용자가 명시적으로 켤 수 있도록 함.
+        this.showAllNodes = false;
+
         // 출발/도착점 표시(비침투적 마커, 명확한 경우에만)
         this.showEndpoints = true;
         this.startMarker = null;
@@ -214,11 +219,6 @@ class PathMap {
     // 선택된 노드는 항상 표시(편집 접근성), 링크 라인은 그대로 유지되어 경로 형태는 보존.
     applyNodeSampling() {
         if (!this.nodes || this.nodes.size === 0) return;
-        // 겹침 판정 기준: 라벨 표시 중이면 라벨 박스(약 41x25px)+여백, 아니면 마커 점 간격.
-        // 라벨은 가로가 더 넓으므로 사각형(AABB) 충돌로 정확히 판정(가로 간격 ↑, 세로 간격 ↓).
-        const labelsOn = this.showNodeIds;
-        const minX = labelsOn ? 46 : 18;
-        const minY = labelsOn ? 26 : 18;
 
         const setVisible = (info, show) => {
             const el = info.marker.getElement();
@@ -232,6 +232,19 @@ class PathMap {
                 if (hel) hel.style.display = show ? '' : 'none';
             }
         };
+
+        // 사용자가 '전체 노드 표시'를 켠 경우: 겹치더라도 샘플링 없이 전부 표시.
+        // 매우 조밀한 경로(예: ~1m 간격 GPS 로그)를 포괄적으로 점검할 때 사용.
+        if (this.showAllNodes) {
+            this.nodes.forEach((info) => setVisible(info, true));
+            return;
+        }
+
+        // 겹침 판정 기준: 라벨 표시 중이면 라벨 박스(약 41x25px)+여백, 아니면 마커 점 간격.
+        // 라벨은 가로가 더 넓으므로 사각형(AABB) 충돌로 정확히 판정(가로 간격 ↑, 세로 간격 ↓).
+        const labelsOn = this.showNodeIds;
+        const minX = labelsOn ? 46 : 18;
+        const minY = labelsOn ? 26 : 18;
 
         const shown = [];  // 표시 확정된 노드의 화면 좌표 {x, y}
         const farEnough = (pt) => {
@@ -1014,6 +1027,11 @@ class PathMap {
     toggleEndpointMarkers(visible) {
         this.showEndpoints = visible;
         this.refreshEndpointMarkers();
+    }
+
+    toggleShowAllNodes(visible) {
+        this.showAllNodes = visible;
+        this.applyNodeSampling();
     }
 
     fitToData() {

@@ -110,6 +110,12 @@ class UIManager {
             }
         });
 
+        document.getElementById('toggleShowAllNodes').addEventListener('change', (e) => {
+            if (window.pathMap) {
+                window.pathMap.toggleShowAllNodes(e.target.checked);
+            }
+        });
+
         document.getElementById('mapStyleSelect').addEventListener('change', (e) => {
             if (window.pathMap) {
                 window.pathMap.setMapStyle(e.target.value);
