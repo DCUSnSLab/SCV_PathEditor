@@ -246,16 +246,16 @@ class FileExplorer {
         // 파일 아이콘
         html += `<span class="file-icon"></span>`;
 
-        // 파일명
-        html += `<span class="file-name" title="${node.fullPath || node.name}">${node.name}</span>`;
+        // 파일명 (파일명/경로는 외부 유래 문자열이므로 이스케이프 — XSS 방지)
+        html += `<span class="file-name" title="${escapeHtml(node.fullPath || node.name)}">${escapeHtml(node.name)}</span>`;
 
         // 파일 크기 및 수정일 (파일인 경우)
         if (node.type !== 'folder') {
             if (node.size) {
-                html += `<span class="file-size">${node.size}</span>`;
+                html += `<span class="file-size">${escapeHtml(node.size)}</span>`;
             }
             if (node.modified) {
-                html += `<span class="file-date">${node.modified}</span>`;
+                html += `<span class="file-date">${escapeHtml(node.modified)}</span>`;
             }
         }
 

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Response
 from fastapi.responses import FileResponse
 from typing import List
 import json
+import re
 import tempfile
 import os
 import shutil
@@ -22,9 +23,11 @@ BASE_DIR = Path(path_service.data_dir).resolve()
 
 
 def _safe_join(rel: str) -> Path:
-    # 상대경로를 절대경로로 변환하고, 데이터 루트 밖으로 나가는 것을 차단
+    # 상대경로를 절대경로로 변환하고, 데이터 루트 밖으로 나가는 것을 차단.
+    # 주의: 단순 접두(startswith) 비교는 '/data/path' 와 '/data/path_evil' 같은
+    # 형제 디렉터리를 통과시키므로 반드시 경로 구분자를 포함해 비교한다.
     p = (BASE_DIR / rel).resolve()
-    if not str(p).startswith(str(BASE_DIR)):
+    if not (p == BASE_DIR or str(p).startswith(str(BASE_DIR) + os.sep)):
         raise HTTPException(status_code=400, detail="Invalid path")
     if not p.is_file():
         raise HTTPException(status_code=404, detail="File not found")
@@ -182,18 +185,17 @@ async def save_path_data(filename: str, path_data: PathData):
             raise HTTPException(status_code=400, detail="파일명이 너무 깁니다 (최대 255자)")
 
         # 특수문자 검증
-        import re
         if re.search(r'[<>:"/\\|?*\x00-\x1f]', filename):
             raise HTTPException(status_code=400, detail="파일명에 사용할 수 없는 문자가 포함되어 있습니다")
 
         if not filename.lower().endswith('.json'):
             raise HTTPException(status_code=400, detail="JSON 파일만 저장 가능합니다")
 
-        # 경로 보안 검증
+        # 경로 보안 검증 (형제 디렉터리 우회 방지를 위해 경로 구분자 포함 비교)
         target_path = (Path(path_service.data_dir) / filename).resolve()
         base_path = Path(path_service.data_dir).resolve()
 
-        if not str(target_path).startswith(str(base_path)):
+        if not (target_path == base_path or str(target_path).startswith(str(base_path) + os.sep)):
             raise HTTPException(status_code=400, detail="유효하지 않은 경로입니다")
 
         # 데이터 검증

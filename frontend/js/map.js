@@ -364,7 +364,7 @@ class PathMap {
         if (!this.quickLinkFirstNode) {
             // 첫 번째 노드 선택
             this.quickLinkFirstNode = clickedNode;
-            this.highlightNode(clickedNode.nodeId, '#ffff00'); // 노란색으로 하이라이트
+            this.refreshNodeAppearance(clickedNode.nodeId);
             showNotification(`첫 번째 노드 ${clickedNode.nodeId} 선택됨. 두 번째 노드를 클릭하세요.`, 'info');
         } else {
             // 두 번째 노드 선택 - 링크 생성
@@ -417,8 +417,7 @@ class PathMap {
 
     resetQuickLinkSelection() {
         if (this.quickLinkFirstNode) {
-            this.highlightNode(this.quickLinkFirstNode.nodeId, '#e74c3c'); // 원래 색상으로 복원
-            this.refreshNodeAppearance(this.quickLinkFirstNode.nodeId);
+            this.refreshNodeAppearance(this.quickLinkFirstNode.nodeId); // 외형을 NodeType 기준으로 원복
             this.quickLinkFirstNode = null;
         }
     }
@@ -467,11 +466,6 @@ class PathMap {
         if (mode !== 'intervalCreate') {
             this.resetIntervalCreate();
         }
-
-        // // QuickLink 모드가 아닐 때 선택 상태 초기화
-        // if (mode !== 'quickLink') {
-        //     this.resetQuickLinkSelection();
-        // }
 
         // ★ 복수 선택도 모드 변경 시 초기화
         this.clearSelections();
@@ -638,12 +632,12 @@ class PathMap {
 
         const arrowMarker = L.marker(midpoint, { icon: arrowIcon });
 
-        // 팝업 추가
+        // 팝업 추가 (ID 들은 파일 유래 문자열이므로 이스케이프)
         const popupContent = `
             <div>
-                <strong>Link: ${ID}</strong><br>
-                From: ${FromNodeID}<br>
-                To: ${ToNodeID}<br>
+                <strong>Link: ${escapeHtml(ID)}</strong><br>
+                From: ${escapeHtml(FromNodeID)}<br>
+                To: ${escapeHtml(ToNodeID)}<br>
                 Length: ${linkData.Length.toFixed(3)} km
             </div>
         `;
@@ -688,18 +682,8 @@ class PathMap {
         }
     }
 
-    highlightNode(nodeId /*, _colorIgnored */) {
-        // 상태는 class로, 색은 NodeType + refresh 로 통일
-        const info = this.nodes.get(nodeId);
-        if (info) {
-            // 호출자가 색 인자를 줘도 무시하고, 실제 외형은 여기서만 결정
-            this.refreshNodeAppearance(nodeId);
-        }
-    }
-
     /** --- Heading arrows (▲) --- */
 // 주어진 heading(deg, 북=0°, 시계방향)으로 회전한 주황색 화살표 아이콘 생성
-// ⬇ 기존 _makeHeadingIcon(...) 을 이걸로 교체
     _makeHeadingIcon(deg) {
         // 링크 폴리라인 굵기(3)의 1.2배 느낌
         const shaftWidth = 4;           // 3 * 1.2 ≈ 4
@@ -758,7 +742,6 @@ class PathMap {
 
 
     async handleNodeDrag(nodeId, newLat, newLng) {
-        console.log(`Handling drag for node ${nodeId}: ${newLat}, ${newLng}`);
         
         // 즉시 UI 업데이트 (노드 데이터)
         const nodeInfo = this.nodes.get(nodeId);
@@ -776,7 +759,6 @@ class PathMap {
             // 백그라운드에서 API 호출 (실패해도 UI는 이미 업데이트됨)
             try {
                 await pathAPI.updateNodePosition(nodeId, newLat, newLng);
-                console.log(`API 업데이트 성공: ${nodeId}`);
                 
                 if (this.onNodeDrag) {
                     this.onNodeDrag(nodeId, newLat, newLng);
@@ -841,7 +823,6 @@ class PathMap {
     }
 
     startDragging(marker, nodeId, e) {
-        console.log('Starting drag for node:', nodeId);
         this.isDragging = true;
         this.draggedMarker = marker;
         this.draggedNodeId = nodeId;
@@ -896,7 +877,6 @@ class PathMap {
         }
 
         if (this.isDragging && this.draggedMarker) {
-            console.log('Ending drag for node:', this.draggedNodeId);
             
             // 드래그 상태 초기화
             this.isDragging = false;
@@ -1045,15 +1025,8 @@ class PathMap {
         this.map.fitBounds(group.getBounds(), { padding: [20, 20] });
     }
 
-    getSelectedNode() {
-        return this.selectedNode ? this.nodes.get(this.selectedNode) : null;
-    }
-
     getSelectedNodeIds() {
         return Array.from(this.selectedNodes);
-    }
-    getSelectedNodes() {
-        return this.getSelectedNodeIds().map(id => this.nodes.get(id)?.data).filter(Boolean);
     }
 
     getMapCenter() {

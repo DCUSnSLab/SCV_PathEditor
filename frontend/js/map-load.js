@@ -34,9 +34,7 @@ window.openPath = function (encodedPath) {
     const clearPreviewBtn = document.getElementById('clearPreviewBtn');
     const showStatus = (msg) => { statusEl.style.display = msg ? 'block' : 'none'; statusEl.textContent = msg || ''; };
 
-    function escapeHtml(s) {
-        return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    }
+    // escapeHtml 은 api.js 의 전역 헬퍼 사용 (중복 정의 제거)
     function folderOf(path) { const i = path.indexOf('/'); return i === -1 ? '(루트)' : path.slice(0, i); }
 
     // ---- 즐겨찾기 (localStorage) ----

@@ -4,8 +4,7 @@ import math
 import logging
 import utm
 from typing import List, Optional
-from datetime import datetime
-from ..models.path_models import Node, Link, PathData, NodeCreate, LinkCreate, GpsInfo, UtmInfo
+from ..models.path_models import Node, Link, PathData, NodeCreate, LinkCreate
 
 logger = logging.getLogger(__name__)
 
@@ -225,15 +224,3 @@ class PathService:
         for link in self.current_links:
             if link.FromNodeID == node_id or link.ToNodeID == node_id:
                 link.Length = self._calculate_link_length(link.FromNodeID, link.ToNodeID)
-
-    def list_available_files(self) -> List[str]:
-        """사용 가능한 JSON 파일 목록 반환"""
-        if not os.path.exists(self.data_dir):
-            return []
-        
-        files = []
-        for file in os.listdir(self.data_dir):
-            if file.endswith('.json'):
-                files.append(file)
-        
-        return sorted(files)

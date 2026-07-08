@@ -15,6 +15,10 @@ class UIManager {
         this.currentData = { Node: [], Link: [] };
         this.currentFilename = null; // 현재 로드된 파일명 저장
 
+        // 미저장 변경 추적 — 편집 발생 시 true, 저장/새 파일 로드 시 false.
+        // beforeunload(app.js)에서 이 값을 보고 이탈 경고를 띄운다.
+        this.isDirty = false;
+
         // ★ 현재 모달이 '수정'으로 열렸는지 구분하기 위한 플래그/ID
         this.editingNodeId = null;
 
@@ -245,6 +249,11 @@ class UIManager {
         this.loadPathData(selectedFile.fullPath);
     }
 
+    // 미저장 변경 표시 — 노드/링크를 추가·수정·삭제하는 모든 경로에서 호출
+    markDirty() {
+        this.isDirty = true;
+    }
+
     async loadPathData(filename) {
         try {
             showLoading();
@@ -253,6 +262,7 @@ class UIManager {
             this.currentData = pathData;
             this.currentData.Node = this.normalizeAllNodes(this.currentData.Node);
             this.currentFilename = filename; // 로드된 파일명 저장
+            this.isDirty = false; // 새로 로드한 시점은 미저장 변경 없음
             this.updateTables();
             this.updateMap();
 
@@ -275,23 +285,24 @@ class UIManager {
     }
 
     async importPathData(filename) {
-  try {
-    showLoading();
-    const pathData = await pathAPI.loadPathData(filename);
+        try {
+            showLoading();
+            const pathData = await pathAPI.loadPathData(filename);
 
-    // 핵심: 단순 push 대신 매핑 병합
-    this.mergePathData(pathData);
+            // 핵심: 단순 push 대신 매핑 병합
+            this.mergePathData(pathData);
+            this.markDirty();
 
-    this.updateTables();
-    this.updateMap();
+            this.updateTables();
+            this.updateMap();
 
-    showNotification(`${filename} 파일의 Path를 가져왔습니다`, 'success');
-  } catch (error) {
-    handleAPIError(error, '파일 가져오기 중 오류가 발생했습니다');
-  } finally {
-    hideLoading();
-  }
-}
+            showNotification(`${filename} 파일의 Path를 가져왔습니다`, 'success');
+        } catch (error) {
+            handleAPIError(error, '파일 가져오기 중 오류가 발생했습니다');
+        } finally {
+            hideLoading();
+        }
+    }
 
     showSaveModal() {
         const saveFilename = document.getElementById('saveFilename');
@@ -376,6 +387,7 @@ class UIManager {
 
             // savePathData 내부에서 UTM 재계산이 이루어짐
             await pathAPI.savePathData(filename, this.currentData);
+            this.isDirty = false; // 저장 성공 — 미저장 변경 없음
 
             // 저장 완료 메시지
             let successMsg = `${filename} (${sizeText}) 저장이 완료되었습니다`;
@@ -525,24 +537,23 @@ class UIManager {
         this.nodeTable.innerHTML = '';
         
         // 노드 데이터 추가
+        // 파일 유래 문자열(ID/Zone 등)은 escapeHtml 로 이스케이프하고,
+        // 삭제 버튼은 인라인 onclick(따옴표 포함 ID 에 취약) 대신 addEventListener 로 바인딩
         this.currentData.Node.forEach(node => {
             const row = this.nodeTable.insertRow();
-            
+
             row.innerHTML = `
-                <td>${node.ID}</td>
+                <td>${escapeHtml(node.ID)}</td>
                 <td>${node.GpsInfo.Lat.toFixed(6)}</td>
                 <td>${node.GpsInfo.Long.toFixed(6)}</td>
                 <td>${node.GpsInfo.Alt.toFixed(2)}</td>
                 <td>${node.UtmInfo.Easting.toFixed(2)}</td>
                 <td>${node.UtmInfo.Northing.toFixed(2)}</td>
-                <td>${node.UtmInfo.Zone}</td>
-                <td>
-                    <button class="btn btn-danger" onclick="uiManager.deleteNode('${node.ID}')">
-                        삭제
-                    </button>
-                </td>
+                <td>${escapeHtml(node.UtmInfo.Zone)}</td>
+                <td><button class="btn btn-danger">삭제</button></td>
             `;
-            
+            row.querySelector('.btn-danger').addEventListener('click', () => this.deleteNode(node.ID));
+
             // 행 클릭 시 노드 선택
             row.addEventListener('click', (e) => {
                 if (!e.target.classList.contains('btn')) {
@@ -555,22 +566,19 @@ class UIManager {
     updateLinkTable() {
         // 테이블 초기화
         this.linkTable.innerHTML = '';
-        
-        // 링크 데이터 추가
+
+        // 링크 데이터 추가 (노드 테이블과 동일하게 이스케이프 + 리스너 바인딩)
         this.currentData.Link.forEach(link => {
             const row = this.linkTable.insertRow();
-            
+
             row.innerHTML = `
-                <td>${link.ID}</td>
-                <td>${link.FromNodeID}</td>
-                <td>${link.ToNodeID}</td>
+                <td>${escapeHtml(link.ID)}</td>
+                <td>${escapeHtml(link.FromNodeID)}</td>
+                <td>${escapeHtml(link.ToNodeID)}</td>
                 <td>${link.Length.toFixed(3)}</td>
-                <td>
-                    <button class="btn btn-danger" onclick="uiManager.deleteLink('${link.ID}')">
-                        삭제
-                    </button>
-                </td>
+                <td><button class="btn btn-danger">삭제</button></td>
             `;
+            row.querySelector('.btn-danger').addEventListener('click', () => this.deleteLink(link.ID));
         });
     }
 
@@ -623,18 +631,19 @@ class UIManager {
             return;
         }
 
+        // Maker/Remark 는 사용자 자유 입력, ID/Zone 은 파일 유래 — 모두 이스케이프 (XSS 방지)
         this.selectedNodeInfo.innerHTML = `
-            <p><strong>ID:</strong> ${nodeData.ID}</p>
-            <p><strong>NodeType:</strong> ${nodeData.NodeType}</p>
-            <p><strong>Heading:</strong> ${this.formatHeading(nodeData)}</p>
+            <p><strong>ID:</strong> ${escapeHtml(nodeData.ID)}</p>
+            <p><strong>NodeType:</strong> ${escapeHtml(nodeData.NodeType)}</p>
+            <p><strong>Heading:</strong> ${escapeHtml(this.formatHeading(nodeData))}</p>
             <p><strong>위도:</strong> ${nodeData.GpsInfo.Lat.toFixed(6)}</p>
             <p><strong>경도:</strong> ${nodeData.GpsInfo.Long.toFixed(6)}</p>
             <p><strong>고도:</strong> ${nodeData.GpsInfo.Alt.toFixed(2)}m</p>
             <p><strong>UTM E:</strong> ${nodeData.UtmInfo.Easting.toFixed(2)}</p>
             <p><strong>UTM N:</strong> ${nodeData.UtmInfo.Northing.toFixed(2)}</p>
-            <p><strong>Zone:</strong> ${nodeData.UtmInfo.Zone}</p>
-            <p><strong>Maker:</strong> ${nodeData.Maker}</p>
-            <p><strong>Remark:</strong> ${nodeData.Remark}</p>
+            <p><strong>Zone:</strong> ${escapeHtml(nodeData.UtmInfo.Zone)}</p>
+            <p><strong>Maker:</strong> ${escapeHtml(nodeData.Maker)}</p>
+            <p><strong>Remark:</strong> ${escapeHtml(nodeData.Remark)}</p>
         `;
     }
 
@@ -684,13 +693,8 @@ class UIManager {
             try {
                 showLoading();
 
-                // (옵션) 서버에 수정 API가 있으면 호출 — 없으면 로컬만 반영
-                let updatedFromServer = null;
-                if (typeof pathAPI.updateNode === 'function') {
-                    updatedFromServer = await pathAPI.updateNode(nodeId, updatedLocal);
-                } else if (typeof pathAPI.updateNodeAttributes === 'function') {
-                    updatedFromServer = await pathAPI.updateNodeAttributes(nodeId, updatedLocal);
-                }
+                // 노드 속성 수정은 로컬(currentData)에만 반영된다 — 서버 반영은 파일 저장 시.
+                // (과거 pathAPI.updateNode 존재 검사 분기는 해당 API 가 없어 항상 죽은 코드였음)
 
                 // 로컬 데이터 갱신
                 const idx = this.currentData.Node.findIndex(n => n.ID === nodeId);
@@ -716,6 +720,7 @@ class UIManager {
 
                 this.hideModal('nodeModal');
                 this.editingNodeId = null; // 편집 종료
+                this.markDirty();
                 showNotification(`노드 ${nodeId}가 수정되었습니다`, 'success');
             } catch (error) {
                 handleAPIError(error, '노드 수정 중 오류가 발생했습니다');
@@ -762,6 +767,7 @@ class UIManager {
             }
 
             this.hideModal('nodeModal');
+            this.markDirty();
             showNotification(`노드 ${newNode.ID}가 생성되었습니다`, 'success');
         } catch (error) {
             handleAPIError(error, '노드 생성 중 오류가 발생했습니다');
@@ -801,6 +807,7 @@ class UIManager {
                 });
             }
             
+            this.markDirty();
             showNotification(`노드 ${nodeId}가 삭제되었습니다`, 'success');
             
         } catch (error) {
@@ -830,6 +837,7 @@ class UIManager {
                 window.pathMap.removeLink(linkId);
             }
             
+            this.markDirty();
             showNotification(`링크 ${linkId}가 삭제되었습니다`, 'success');
             
         } catch (error) {
@@ -842,6 +850,7 @@ class UIManager {
     onLinkCreated(linkData) {
         // 새로 생성된 링크를 현재 데이터에 추가
         this.currentData.Link.push(linkData);
+        this.markDirty();
         this.updateLinkTable();
     }
 
@@ -1040,6 +1049,7 @@ class UIManager {
         this.updateSelectedNodeInfo(null, null);
 
         this.hideModal('batchEditModal');
+        this.markDirty();
         showNotification(`${ids.length}개 노드를 일괄 수정했습니다.`, 'success');
 
         // (옵션) 서버에도 저장하고 싶다면 저장 버튼으로 파일 저장을 호출하거나,
@@ -1165,6 +1175,7 @@ class UIManager {
             this.updateClipboardUI();
             this.updateSelectedNodeButtons();
 
+            this.markDirty();
             showNotification(`✂️ ${cutNodes.length}개 노드와 ${cutLinks.length}개 링크를 잘라냈습니다.\n🗂️ 클립보드에 저장되었습니다. 붙여넣기 버튼을 눌러 원하는 위치에 배치하세요.`, 'success');
 
         } catch (error) {
@@ -1299,6 +1310,7 @@ class UIManager {
             this.updateTables();
             this.updateMap();
 
+            this.markDirty();
             showNotification(`📍 ${pastedNodes.length}개 노드와 ${pastedLinks.length}개 링크를 붙여넣었습니다.\n📍 새 위치: ${mapCenter.lat.toFixed(6)}, ${mapCenter.lng.toFixed(6)}`, 'success');
 
         } catch (error) {
