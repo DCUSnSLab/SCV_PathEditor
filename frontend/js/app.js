@@ -67,6 +67,8 @@ class SCVPathEditor {
         // 노드 드래그 이벤트
         this.map.onNodeDrag = async (nodeId, lat, lng) => {
             try {
+                this.ui.markDirty(); // 위치 변경은 미저장 변경
+
                 // 현재 데이터 업데이트
                 const nodeIndex = this.ui.currentData.Node.findIndex(node => node.ID === nodeId);
                 if (nodeIndex !== -1) {
@@ -185,8 +187,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// 페이지 언로드 시 정리 작업
-window.addEventListener('beforeunload', () => {
+// 페이지 이탈 시: 미저장 변경이 있으면 브라우저 이탈 확인 대화상자 표시
+window.addEventListener('beforeunload', (e) => {
+    if (window.uiManager && window.uiManager.isDirty) {
+        e.preventDefault();
+        e.returnValue = ''; // 레거시 브라우저 호환 — 이 값이 있어야 경고가 뜸
+        return;
+    }
+    // 미저장 변경이 없을 때만 지도 정리 (경고 대화상자와 정리 작업이 겹치지 않도록)
     if (window.scvApp && window.scvApp.map) {
         window.scvApp.map.clearAll();
     }

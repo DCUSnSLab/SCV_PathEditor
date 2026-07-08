@@ -57,15 +57,15 @@
                     </div>
                     <div class="form-check">
                         <input type="checkbox" id="toggleNodeIds" class="form-check-input" checked>
-                        <p class="small-text">노드 ID 표시</p>
+                        <label class="form-check-label small-text" for="toggleNodeIds">노드 ID 표시</label>
                     </div>
                     <div class="form-check">
                         <input type="checkbox" id="toggleEndpoints" class="form-check-input" checked>
-                        <p class="small-text">출발/도착점 표시</p>
+                        <label class="form-check-label small-text" for="toggleEndpoints">출발/도착점 표시</label>
                     </div>
                     <div class="form-check">
                         <input type="checkbox" id="toggleShowAllNodes" class="form-check-input">
-                        <p class="small-text">전체 노드 표시(샘플링 해제)</p>
+                        <label class="form-check-label small-text" for="toggleShowAllNodes">전체 노드 표시(샘플링 해제)</label>
                     </div>
                 </div>
 
@@ -76,7 +76,7 @@
                         <button id="selectModeBtn" class="btn btn-mode">복수 선택 모드</button>
                         <button id="addNodeModeBtn" class="btn btn-mode">생성 모드</button>
                         <button id="dragModeBtn" class="btn btn-mode">이동 모드</button>
-                        <button id="deleteModeBtn" class="btn btn-mode">삭제 모드<br/>(미구현)</button>
+                        <button id="deleteModeBtn" class="btn btn-mode">삭제 모드</button>
                     </div>
                     <div class="mode-buttons">
                         <p class="middle-text">편집</p>
@@ -98,7 +98,6 @@
                     <div class="mode-buttons">
                         <p class="middle-text">링크</p>
                         <button id="linkTwoNodesModeBtn" class="btn btn-mode">두 노드 잇기 모드</button>
-                        <button id="linkManyNodesModeBtn" class="btn btn-mode">여러 노드 잇기 모드<br/>(미구현)</button>
                     </div>
                 </div>
 
@@ -314,23 +313,22 @@
     <script src="js/api.js"></script>
     <script src="js/file-explorer.js"></script>
     <script src="js/map.js"></script>
-    <script src="js/utm-validator.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/app.js"></script>
+    <script>
+        // 우측 패널 접기/펼치기 (지도 크기 재계산 포함)
+        const panel = document.getElementById('right-pn');
+        const btn = document.getElementById('menu-btn');
+
+        btn.addEventListener('click', () => {
+            const hidden = panel.classList.toggle('is-hidden');
+            btn.setAttribute('aria-expanded', String(!hidden));
+
+            // Leaflet 맵 크기 재계산 (PathMap 의 Leaflet 인스턴스는 .map 속성)
+            if (window.pathMap?.map) {
+                setTimeout(() => window.pathMap.map.invalidateSize(), 0);
+            }
+        });
+    </script>
 </body>
 </html>
-
-<script>
-    const panel = document.getElementById('right-pn');
-    const btn = document.getElementById('menu-btn');
-
-    btn.addEventListener('click', () => {
-    const hidden = panel.classList.toggle('is-hidden');
-    btn.setAttribute('aria-expanded', String(!hidden));
-
-    // Leaflet 맵이 있다면 크기 재계산
-    if (!hidden && window.pathMap?.leafletMap) {
-        setTimeout(() => window.pathMap.leafletMap.invalidateSize(), 0);
-    }
-    });
-</script>

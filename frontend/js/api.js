@@ -256,14 +256,6 @@ class PathAPI {
     }
 
     // 노드 관련 API
-    async getAllNodes() {
-        return await this.request('/nodes');
-    }
-
-    async getNode(nodeId) {
-        return await this.request(`/nodes/${nodeId}`);
-    }
-
     async createNode(nodeData) {
         return await this.request('/nodes', {
             method: 'POST',
@@ -284,14 +276,6 @@ class PathAPI {
     }
 
     // 링크 관련 API
-    async getAllLinks() {
-        return await this.request('/links');
-    }
-
-    async getLink(linkId) {
-        return await this.request(`/links/${linkId}`);
-    }
-
     async createLink(linkData) {
         return await this.request('/links', {
             method: 'POST',
@@ -626,87 +610,9 @@ function hideLoading() {
     }
 }
 
-// 프로그레스 바 표시 (대용량 파일 처리용)
-function showProgress(message = '진행 중...', progress = 0) {
-    let progressOverlay = document.getElementById('progress-overlay');
-    if (!progressOverlay) {
-        progressOverlay = document.createElement('div');
-        progressOverlay.id = 'progress-overlay';
-        progressOverlay.innerHTML = `
-            <div class="loading-backdrop">
-                <div class="progress-content">
-                    <div class="progress-message">진행 중...</div>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar"></div>
-                    </div>
-                    <div class="progress-percent">0%</div>
-                </div>
-            </div>
-        `;
-
-        // 프로그레스 스타일 추가
-        const style = document.createElement('style');
-        style.textContent = `
-            #progress-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                z-index: 9999;
-                display: none;
-            }
-            .progress-content {
-                background: white;
-                padding: 25px;
-                border-radius: 8px;
-                display: flex;
-                flex-direction: column;
-                gap: 15px;
-                min-width: 300px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            }
-            .progress-message {
-                color: #333;
-                font-weight: 500;
-                text-align: center;
-            }
-            .progress-bar-container {
-                background: #f0f0f0;
-                border-radius: 10px;
-                height: 8px;
-                overflow: hidden;
-            }
-            .progress-bar {
-                background: #3498db;
-                height: 100%;
-                width: 0%;
-                transition: width 0.3s ease;
-            }
-            .progress-percent {
-                text-align: center;
-                color: #666;
-                font-size: 14px;
-            }
-        `;
-        document.head.appendChild(style);
-        document.body.appendChild(progressOverlay);
-    }
-
-    const messageElement = progressOverlay.querySelector('.progress-message');
-    const progressBar = progressOverlay.querySelector('.progress-bar');
-    const progressPercent = progressOverlay.querySelector('.progress-percent');
-
-    messageElement.textContent = message;
-    progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
-    progressPercent.textContent = `${Math.round(progress)}%`;
-
-    progressOverlay.style.display = 'flex';
-}
-
-function hideProgress() {
-    const progressOverlay = document.getElementById('progress-overlay');
-    if (progressOverlay) {
-        progressOverlay.style.display = 'none';
-    }
+// HTML 이스케이프 (XSS 방지) — 파일/사용자 데이터를 innerHTML 로 렌더링하기 전 반드시 적용
+function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
 }
