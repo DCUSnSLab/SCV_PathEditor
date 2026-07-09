@@ -28,11 +28,12 @@
                     <button id="downloadBtn" class="btn btn-secondary">Download</button>
                 </div>
             </div>
+            <div class="header-right">
+                <button id="menu-btn" class="btn btn-toggle" aria-controls="right-pn" aria-expanded="true">
+                    📋 테이블 및 정보
+                </button>
+            </div>
         </header>
-
-        <button id="menu-btn" class="floating-toggle" aria-controls="right-pn" aria-expanded="true">
-            테이블 및 정보
-        </button>
 
         <!-- Main Content -->
         <div class="main-content">
@@ -81,7 +82,7 @@
                     <div class="mode-buttons">
                         <p class="middle-text">편집</p>
                         <button id="cutNodesBtn" class="btn btn-secondary" disabled>✂️ 잘라내기</button>
-                        <button id="pasteNodesBtn" class="btn btn-secondary" disabled>📍 붙여넣기 (비활성)</button>
+                        <button id="pasteNodesBtn" class="btn btn-secondary" disabled>📍 붙여넣기</button>
                         <button id="clearClipboardBtn" class="btn btn-secondary" disabled>🗑️ 클립보드 비우기</button>
                         <div class="clipboard-status" id="clipboardStatus">
                             📭 클립보드가 비어있습니다
@@ -166,7 +167,7 @@
                 <!--링크 테이블-->
                 <details open>
                     <summary>링크 테이블</summary>
-                    <div class="table-section">
+                    <div>
                         <div class="table-container">
                             <table id="linkTable" class="data-table">
                                 <thead>
@@ -201,41 +202,41 @@
     </div>
 
     <!-- Modals -->
-    <div id="nodeModal" class="modal">
+    <div id="nodeModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="nodeModalTitle">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>노드 추가</h3>
-                <span class="close">&times;</span>
+                <h3 id="nodeModalTitle">노드 추가</h3>
+                <button type="button" class="close" aria-label="닫기">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="nodeForm">
                     <div class="form-group">
-                        <label>위도:</label>
+                        <label for="nodeLat">위도:</label>
                         <input type="number" id="nodeLat" step="any" readonly>
                     </div>
                     <div class="form-group">
-                        <label>경도:</label>
+                        <label for="nodeLon">경도:</label>
                         <input type="number" id="nodeLon" step="any" readonly>
                     </div>
                     <div class="form-group">
-                        <label>고도:</label>
+                        <label for="nodeAlt">고도:</label>
                         <input type="number" id="nodeAlt" step="any" value="0">
                     </div>
                     <div class="form-group">
-                        <label>Maker:</label>
+                        <label for="nodeMaker">Maker:</label>
                         <input type="text" id="nodeMaker" value="SCV Web Editor">
                     </div>
                     <div class="form-group">
-                        <label>Remark:</label>
+                        <label for="nodeRemark">Remark:</label>
                         <input type="text" id="nodeRemark" value="">
                     </div>
                     <div class="form-group">
-                        <label>NodeType:</label>
+                        <label for="nodeType">NodeType:</label>
                         <input type="number" id="nodeType" value="1" min="1" step="1"/>
                     </div>
                     <div class="form-group">
-                        <label>Heading:</label>
-                        <input type="number" id="nodeHeading" value="-1.0" step="any" step="0.1"/>
+                        <label for="nodeHeading">Heading:</label>
+                        <input type="number" id="nodeHeading" value="-1.0" step="any"/>
                     </div>
                 </form>
             </div>
@@ -246,28 +247,28 @@
         </div>
     </div>
 
-    <div id="batchEditModal" class="modal">
+    <div id="batchEditModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="batchModalTitle">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>선택된 노드 속성 일괄 수정</h3>
-                <span class="close">&times;</span>
+                <h3 id="batchModalTitle">선택된 노드 속성 일괄 수정</h3>
+                <button type="button" class="close" aria-label="닫기">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="batchForm">
                     <div class="form-group">
-                        <label>고도(Alt):</label>
+                        <label for="batchAlt">고도(Alt):</label>
                         <input type="number" id="batchAlt" step="any" placeholder="값 입력 시 일괄 덮어쓰기">
                     </div>
                     <div class="form-group">
-                        <label>Maker:</label>
+                        <label for="batchMaker">Maker:</label>
                         <input type="text" id="batchMaker" placeholder="값 입력 시 일괄 덮어쓰기">
                     </div>
                     <div class="form-group">
-                        <label>NodeType:</label>
+                        <label for="batchNodeType">NodeType:</label>
                         <input type="number" id="batchNodeType" min="1" step="1" placeholder="값 입력 시 일괄 덮어쓰기">
                     </div>
                     <div class="form-group">
-                        <label>Heading:</label>
+                        <label for="batchHeading">Heading:</label>
                         <input type="number" id="batchHeading" step="any" placeholder="값 입력 시 일괄 덮어쓰기">
                     </div>
                 </form>
@@ -281,16 +282,16 @@
     </div>
 
 
-        <div id="saveModal" class="modal">
+        <div id="saveModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="saveModalTitle">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>파일 저장</h3>
-                <span class="close">&times;</span>
+                <h3 id="saveModalTitle">파일 저장</h3>
+                <button type="button" class="close" aria-label="닫기">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="saveForm">
                     <div class="form-group">
-                        <label>파일명:</label>
+                        <label for="saveFilename">파일명:</label>
                         <input type="text" id="saveFilename" placeholder="filename.json">
                     </div>
                 </form>
@@ -300,12 +301,6 @@
                 <button type="button" id="cancelSaveBtn" class="btn btn-secondary">취소</button>
             </div>
         </div>
-    </div>
-
-    <!-- Loading Spinner -->
-    <div id="loading" class="loading" style="display: none;">
-        <div class="spinner"></div>
-        <p>처리 중...</p>
     </div>
 
     <!-- Scripts -->

@@ -97,6 +97,7 @@ class SCVPathEditor {
                 
             } catch (error) {
                 console.error('노드 드래그 처리 중 오류:', error);
+                showNotification('노드 위치의 서버 반영에 실패했습니다. 저장 전에 좌표를 확인해주세요.', 'error');
             }
         };
 
