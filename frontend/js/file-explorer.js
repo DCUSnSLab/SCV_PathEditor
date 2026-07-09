@@ -621,7 +621,9 @@ class FileExplorer {
         for (const item of items) {
             if (item.dataset.fullpath === filepath) {
                 this.selectFile(item, targetNode);
-                item.scrollIntoView({ block: 'center' });
+                // 'nearest': 파일트리 내부만 스크롤 — 'center' 는 좌측 패널 전체를
+                // 끌어내려 도구 버튼들이 화면 밖으로 밀려나는 부작용이 있었음
+                item.scrollIntoView({ block: 'nearest' });
                 break;
             }
         }

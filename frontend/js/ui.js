@@ -184,6 +184,16 @@ class UIManager {
 
         applyBatchBtn.addEventListener('click', () => this.applyBatchEdits());
         cancelBatchBtn.addEventListener('click', () => this.hideModal('batchEditModal'));
+
+        // ESC 키로 열린 모달 닫기 (접근성)
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            document.querySelectorAll('.modal').forEach(modal => {
+                if (modal.style.display === 'block') {
+                    this.hideModal(modal.id);
+                }
+            });
+        });
     }
 
     setMode(mode) {
@@ -541,6 +551,7 @@ class UIManager {
         // 삭제 버튼은 인라인 onclick(따옴표 포함 ID 에 취약) 대신 addEventListener 로 바인딩
         this.currentData.Node.forEach(node => {
             const row = this.nodeTable.insertRow();
+            row.dataset.nodeId = node.ID;
 
             row.innerHTML = `
                 <td>${escapeHtml(node.ID)}</td>
@@ -561,6 +572,29 @@ class UIManager {
                 }
             });
         });
+
+        // 재렌더 후에도 현재 선택 상태를 행에 반영
+        this.updateNodeRowHighlight();
+    }
+
+    // 지도의 선택 상태(단일/복수)를 노드 테이블 행 하이라이트로 동기화
+    updateNodeRowHighlight() {
+        const selected = new Set(window.pathMap?.getSelectedNodeIds() || []);
+        if (window.pathMap?.selectedNode) {
+            selected.add(window.pathMap.selectedNode);
+        }
+
+        let firstSelectedRow = null;
+        Array.from(this.nodeTable.rows).forEach(row => {
+            const isSelected = selected.has(row.dataset.nodeId);
+            row.classList.toggle('selected', isSelected);
+            if (isSelected && !firstSelectedRow) firstSelectedRow = row;
+        });
+
+        // 선택된 행이 테이블 스크롤 밖에 있으면 보이도록 이동
+        if (firstSelectedRow) {
+            firstSelectedRow.scrollIntoView({ block: 'nearest' });
+        }
     }
 
     updateLinkTable() {
@@ -858,6 +892,9 @@ class UIManager {
         const modal = document.getElementById(modalId);
         if (modal) {
             modal.style.display = 'block';
+            // 접근성: 첫 편집 가능 입력으로 포커스 이동
+            const firstInput = modal.querySelector('input:not([readonly]):not([disabled])');
+            if (firstInput) firstInput.focus();
         }
     }
 
@@ -1078,6 +1115,9 @@ class UIManager {
             cutBtn.disabled = true;
             cutBtn.textContent = '✂️ 잘라내기';
         }
+
+        // 선택 상태 변화는 항상 이 경로를 지나므로 테이블 하이라이트도 함께 동기화
+        this.updateNodeRowHighlight();
     }
 
     // 클립보드 UI 업데이트

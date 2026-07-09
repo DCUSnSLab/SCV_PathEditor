@@ -385,8 +385,31 @@ function handleAPIError(error, defaultMessage = 'API 요청 중 오류가 발생
 }
 
 // 개선된 알림 메시지 시스템
+// 알림은 헤더 아래 우측의 공용 컨테이너에 세로로 쌓인다 (겹침 방지)
+function getNotificationContainer() {
+    let container = document.getElementById('notificationContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'notificationContainer';
+        container.setAttribute('aria-live', 'polite');
+        Object.assign(container.style, {
+            position: 'fixed',
+            top: '72px',
+            right: '16px',
+            zIndex: '10000',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: '8px',
+            pointerEvents: 'none'
+        });
+        document.body.appendChild(container);
+    }
+    return container;
+}
+
 function showNotification(message, type = 'info', duration = null) {
-    // 기존 같은 타입의 알림 제거
+    // 같은 타입의 기존 알림은 최신 메시지로 대체 (반복 알림 스팸 방지)
     const existingNotifications = document.querySelectorAll(`.notification-${type}`);
     existingNotifications.forEach(notification => {
         notification.remove();
@@ -410,6 +433,7 @@ function showNotification(message, type = 'info', duration = null) {
 
     const messageSpan = document.createElement('span');
     messageSpan.textContent = message;
+    messageSpan.style.whiteSpace = 'pre-line'; // \n 포함 다중 줄 메시지 렌더
 
     // 닫기 버튼 추가
     const closeBtn = document.createElement('button');
@@ -436,11 +460,10 @@ function showNotification(message, type = 'info', duration = null) {
     notification.appendChild(messageSpan);
     notification.appendChild(closeBtn);
 
-    // 스타일 적용
+    // 스타일 적용 (위치는 컨테이너가 관리 — 세로 스택)
+    notification.setAttribute('role', 'alert');
     Object.assign(notification.style, {
-        position: 'fixed',
-        top: '20px',
-        right: '20px',
+        pointerEvents: 'auto',
         padding: '12px 16px',
         borderRadius: '8px',
         color: 'white',
@@ -498,8 +521,8 @@ function showNotification(message, type = 'info', duration = null) {
         document.head.appendChild(style);
     }
 
-    // DOM에 추가
-    document.body.appendChild(notification);
+    // DOM에 추가 (스택 컨테이너)
+    getNotificationContainer().appendChild(notification);
 
     // 자동 제거 시간 설정
     const autoRemoveTime = duration || (type === 'error' ? 5000 : type === 'warning' ? 4000 : 3000);
